@@ -14,6 +14,8 @@ func main() {
 	// Setup flags
 	initPtr := flag.Bool("init", false, "initializes `r` and starts tracking all commands used in bash")
 	statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
+	commandsPtr := flag.Bool("commands", false, "show all commands that `r` will track")
+	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
 
 	if *initPtr {
@@ -24,6 +26,23 @@ func main() {
 	if *statsPtr {
 		stats()
 		os.Exit(0)
+	}
+
+	if *commandsPtr {
+		commands, err := listCommands()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		for _, c := range commands {
+			fmt.Println(c)
+		}
+
+		os.Exit(0)
+	}
+
+	if *addPtr != "" {
+		fmt.Println("adding: ", *addPtr)
 	}
 
 	// TODO re initialize every time command is run to keep commands list up to date
@@ -39,15 +58,15 @@ func initialize() {
 		log.Fatal(err)
 	}
 
-	commandList, err := listCommands()
-	if err != nil {
-		log.Fatal(err)
-	}
+	// commandList, err := listCommands()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
-	err = createAlias(commandList)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err = createAlias(commandList)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 }
 
 // setupDB verifies and creates boltDB in ~ home folder
@@ -88,7 +107,6 @@ func listCommands() ([]string, error) {
 			// Check if file is executable
 			if m&0111 != 0 {
 				commands = append(commands, f.Name())
-				fmt.Println(f.Name())
 			}
 		}
 
@@ -111,12 +129,12 @@ func listCommands() ([]string, error) {
 	return commands, nil
 }
 
-// createAlias creates .sh file to alias commands
-func createAlias(commandList []string) error {
-	fmt.Println("create aliases for: ", commandList)
-
-	return nil
-}
+// // createAlias creates .sh file to alias commands
+// func createAlias(commandList []string) error {
+// 	fmt.Println("create aliases for: ", commandList)
+//
+// 	return nil
+// }
 
 // stats TODO print stats and usage of r
 func stats() {
