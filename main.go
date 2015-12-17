@@ -18,16 +18,19 @@ func main() {
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
 
+	// Check if `init` flag is passed
 	if *initPtr {
 		initialize()
 		os.Exit(0)
 	}
 
+	// Check if `stats` flag is passed
 	if *statsPtr {
 		stats()
 		os.Exit(0)
 	}
 
+	// Check if `commands` flag is passed
 	if *commandsPtr {
 		commands, err := listCommands()
 		if err != nil {
@@ -41,12 +44,14 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Check if `add` flag is passed
 	if *addPtr != "" {
 		args := strings.Split(*addPtr, ":")
-		add(args[0], args[1])
+		err := add(args[0], args[1])
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-
-	// TODO re initialize every time command is run to keep commands list up to date
 }
 
 // initialize uses compgen -c to get a list of all bash commands
@@ -80,11 +85,11 @@ func setupDB() error {
 
 // add checks if command being passed is in the listCommands
 // then stores the command and workding directory
-func add(path string, cmd string) {
+func add(path string, cmd string) error {
 	// first check to see if cmd is valid
 	commands, err := listCommands()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	containsCmd := func() bool {
@@ -98,10 +103,12 @@ func add(path string, cmd string) {
 
 	// check if the command is valid
 	if !containsCmd() {
-		return
+		return nil
 	}
 
 	fmt.Printf("adding. cmd: %s, path: %s \n", cmd, path)
+
+	return nil
 }
 
 // listCommands use $PATH to find directories
