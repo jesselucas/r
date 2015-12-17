@@ -12,17 +12,10 @@ import (
 
 func main() {
 	// Setup flags
-	initPtr := flag.Bool("init", false, "initializes `r` and starts tracking all commands used in bash")
 	statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
 	commandsPtr := flag.Bool("commands", false, "show all commands that `r` will track")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
-
-	// Check if `init` flag is passed
-	if *initPtr {
-		initialize()
-		os.Exit(0)
-	}
 
 	// Check if `stats` flag is passed
 	if *statsPtr {
@@ -54,27 +47,6 @@ func main() {
 	}
 }
 
-// initialize uses compgen -c to get a list of all bash commands
-// then creates aliases for each of them to store usage and directory
-func initialize() {
-	fmt.Println("initialize")
-
-	err := setupDB()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// commandList, err := listCommands()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// err = createAlias(commandList)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-}
-
 // setupDB verifies and creates boltDB in ~ home folder
 func setupDB() error {
 	// TODO setup boltdb
@@ -86,10 +58,9 @@ func setupDB() error {
 // add checks if command being passed is in the listCommands
 // then stores the command and workding directory
 func add(path string, promptCmd string) error {
-	// only want the first command in the promptCmd string
+	// get the first command in the promptCmd string
 	cmd := strings.Split(promptCmd, " ")[0]
 
-	// first check to see if cmd is valid
 	commands, err := listCommands()
 	if err != nil {
 		return err
@@ -97,6 +68,7 @@ func add(path string, promptCmd string) error {
 
 	containsCmd := func() bool {
 		for _, c := range commands {
+			// check first command against list of commands
 			if c == cmd {
 				return true
 			}
@@ -160,17 +132,10 @@ func listCommands() ([]string, error) {
 		}
 	}
 
-	wg.Wait() // Wait for the paths to be checks
+	wg.Wait() // Wait for the paths to be checked
 
 	return commands, nil
 }
-
-// // createAlias creates .sh file to alias commands
-// func createAlias(commandList []string) error {
-// 	fmt.Println("create aliases for: ", commandList)
-//
-// 	return nil
-// }
 
 // stats TODO print stats and usage of r
 func stats() {
