@@ -85,7 +85,10 @@ func setupDB() error {
 
 // add checks if command being passed is in the listCommands
 // then stores the command and workding directory
-func add(path string, cmd string) error {
+func add(path string, promptCmd string) error {
+	// only want the first command in the promptCmd string
+	cmd := strings.Split(promptCmd, " ")[0]
+
 	// first check to see if cmd is valid
 	commands, err := listCommands()
 	if err != nil {
@@ -106,7 +109,7 @@ func add(path string, cmd string) error {
 		return nil
 	}
 
-	fmt.Printf("adding. cmd: %s, path: %s \n", cmd, path)
+	fmt.Printf("adding. cmd: %s, path: %s \n", promptCmd, path)
 
 	return nil
 }

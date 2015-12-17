@@ -10,7 +10,6 @@ function pre() {
   # Keep reference to what command was executed
   # local cmd="${1##*/}"
   local cmd=$*
-  echo $cmd
 
   # Add current directory and command to `r`
   r --add "$(\pwd):$cmd"
