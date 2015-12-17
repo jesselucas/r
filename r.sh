@@ -7,17 +7,19 @@ function pre() {
   fi
   unset R_AT_PROMPT
 
-  # Verify command
-
+  # Keep reference to what command was executed
+  # local cmd="${1##*/}"
+  local cmd=$*
+  echo $cmd
 
   # Add current directory and command to `r`
   echo "Running PreCommand"
 
-  r --add "$(\pwd)"
+  r --add "$(\pwd):$cmd"
 }
 
 # Set trap to reun pre before command
-trap "pre" DEBUG
+trap 'pre $BASH_COMMAND' DEBUG
 
 # This will run after the execution of the previous full command line.  We don't
 # want `post` to execute when first starting a bash session (FIRST_PROMPT)
@@ -31,7 +33,6 @@ function post() {
   fi
 
   # Post command logic
-  echo "Running PostCommand"
 }
 
 # Run post after command
