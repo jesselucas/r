@@ -13,8 +13,6 @@ function pre() {
   echo $cmd
 
   # Add current directory and command to `r`
-  echo "Running PreCommand"
-
   r --add "$(\pwd):$cmd"
 }
 

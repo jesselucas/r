@@ -42,7 +42,8 @@ func main() {
 	}
 
 	if *addPtr != "" {
-		fmt.Println("adding: ", *addPtr)
+		args := strings.Split(*addPtr, ":")
+		add(args[0], args[1])
 	}
 
 	// TODO re initialize every time command is run to keep commands list up to date
@@ -77,12 +78,37 @@ func setupDB() error {
 	return nil
 }
 
+// add checks if command being passed is in the listCommands
+// then stores the command and workding directory
+func add(path string, cmd string) {
+	// first check to see if cmd is valid
+	commands, err := listCommands()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	containsCmd := func() bool {
+		for _, c := range commands {
+			if c == cmd {
+				return true
+			}
+		}
+		return false
+	}
+
+	// check if the command is valid
+	if !containsCmd() {
+		return
+	}
+
+	fmt.Printf("adding. cmd: %s, path: %s \n", cmd, path)
+}
+
 // listCommands use $PATH to find directories
 // Then reads each directory and looks for executables
 func listCommands() ([]string, error) {
 	// Split $PATH directories into slice
 	paths := strings.Split(os.Getenv("PATH"), ":")
-	fmt.Println(paths)
 	var commands []string
 
 	// created buffered error chan
