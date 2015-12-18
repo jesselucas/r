@@ -38,25 +38,6 @@ func main() {
 	}
 	defer db.Close()
 
-	// reset last command to blank
-	// set line as stored command
-	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("command"))
-		if err != nil {
-			return err
-		}
-
-		err = b.Put([]byte("command"), []byte(""))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// Check if `results` flag is passed
 	// if *completePtr != "" {
 	// 	results := showResults(*completePtr)
@@ -80,6 +61,25 @@ func main() {
 		}
 
 		os.Exit(0)
+	}
+
+	// reset last command to blank
+	// set line as stored command
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("command"))
+		if err != nil {
+			return err
+		}
+
+		err = b.Put([]byte("command"), []byte(""))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	readLine()
@@ -162,7 +162,6 @@ func showResults() ([]string, error) {
 		b := tx.Bucket([]byte("DirectoryBucket"))
 		pathBucket := b.Bucket([]byte(wd))
 		return pathBucket.ForEach(func(k, v []byte) error {
-			fmt.Printf("key=%s, value=%s\n", k, v)
 			results = append(results, string(k))
 			return nil
 		})
