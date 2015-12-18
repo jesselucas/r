@@ -8,12 +8,14 @@ import (
 	"os"
 	"strings"
 	"sync"
+
+	"github.com/chzyer/readline"
 )
 
 func main() {
 	// Setup flags
 	statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
-	commandsPtr := flag.Bool("commands", false, "show all commands that `r` will track")
+	completePtr := flag.String("complete", "", "show all results for `r`")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
 
@@ -23,17 +25,12 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Check if `commands` flag is passed
-	if *commandsPtr {
-		commands, err := listCommands()
-		if err != nil {
-			log.Fatal(err)
+	// Check if `results` flag is passed
+	if *completePtr != "" {
+		results := showResults(*completePtr)
+		for _, result := range results {
+			fmt.Println(result)
 		}
-
-		for _, c := range commands {
-			fmt.Println(c)
-		}
-
 		os.Exit(0)
 	}
 
@@ -44,6 +41,37 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		os.Exit(0)
+	}
+
+	readLine()
+}
+
+func readLine() {
+	// create completer from results
+	results := showResults("r")
+	var pcItems []*readline.PrefixCompleter
+	for _, result := range results {
+		pcItems = append(pcItems, readline.PcItem(result))
+	}
+	var completer = readline.NewPrefixCompleter(pcItems...)
+
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:       "> ",
+		AutoComplete: completer,
+	})
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+
+	for {
+		line, err := rl.Readline()
+		if err != nil { // io.EOF
+			break
+		}
+		println(line)
 	}
 }
 
@@ -53,6 +81,26 @@ func setupDB() error {
 	fmt.Println("setup boltdb")
 
 	return nil
+}
+
+func showResults(input string) []string {
+	results := []string{"git status", "git clone", "go install", "cd ~", "cd $GOPATH/src/github.com/jesselucas", "ls -la"}
+
+	if input == "r" {
+		return results
+	}
+
+	// filter
+	fmt.Println("filtered: ", input)
+	var filtered []string
+	for _, result := range results {
+		if strings.HasPrefix(result, input) {
+			filtered = append(filtered, result)
+		}
+	}
+
+	return filtered
+
 }
 
 // add checks if command being passed is in the listCommands
