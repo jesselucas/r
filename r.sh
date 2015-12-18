@@ -11,6 +11,7 @@ function pre() {
   LAST_CMD="${1##*/}"
   local cmd=$*
 
+  # TODO Don't add if the status errored
   # Add current directory and command to `r`
   r --add "$(\pwd):$cmd"
 }

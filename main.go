@@ -113,6 +113,8 @@ func readLine() {
 			break
 		}
 
+		// TODO Only store if the command typed is in the list of commands
+
 		// set line as stored command
 		err = db.Update(func(tx *bolt.Tx) error {
 			b, err := tx.CreateBucketIfNotExists([]byte("command"))
