@@ -14,23 +14,23 @@ import (
 
 func main() {
 	// Setup flags
-	statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
-	completePtr := flag.String("complete", "", "show all results for `r`")
+	// statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
+	// completePtr := flag.String("complete", "", "show all results for `r`")
+	commandPtr := flag.Bool("command", false, "show last command selected from `r`")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
 
-	// Check if `stats` flag is passed
-	if *statsPtr {
-		stats()
-		os.Exit(0)
-	}
-
 	// Check if `results` flag is passed
-	if *completePtr != "" {
-		results := showResults(*completePtr)
-		for _, result := range results {
-			fmt.Println(result)
-		}
+	// if *completePtr != "" {
+	// 	results := showResults(*completePtr)
+	// 	for _, result := range results {
+	// 		fmt.Println(result)
+	// 	}
+	// 	os.Exit(0)
+	// }
+
+	if *commandPtr {
+		fmt.Println(`echo "it worked!!"`)
 		os.Exit(0)
 	}
 
@@ -62,7 +62,7 @@ func readLine() {
 		AutoComplete: completer,
 	})
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	defer rl.Close()
 
@@ -71,7 +71,10 @@ func readLine() {
 		if err != nil { // io.EOF
 			break
 		}
-		println(line)
+
+		// set line as stored command
+		fmt.Println(line)
+		os.Exit(0)
 	}
 }
 
@@ -84,7 +87,7 @@ func setupDB() error {
 }
 
 func showResults(input string) []string {
-	results := []string{"git status", "git clone", "go install", "cd ~", "cd $GOPATH/src/github.com/jesselucas", "ls -la"}
+	results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
 
 	if input == "r" {
 		return results
@@ -114,24 +117,25 @@ func add(path string, promptCmd string) error {
 		return err
 	}
 
-	containsCmd := func() bool {
-		for _, c := range commands {
-			// check first command against list of commands
-			if c == cmd {
-				return true
-			}
-		}
-		return false
-	}
-
 	// check if the command is valid
-	if !containsCmd() {
+	if !containsCmd(cmd, commands) {
 		return nil
 	}
 
+	// Add command to db
 	fmt.Printf("adding. cmd: %s, path: %s \n", promptCmd, path)
 
 	return nil
+}
+
+func containsCmd(cmd string, commands []string) bool {
+	for _, c := range commands {
+		// check first command against list of commands
+		if c == cmd {
+			return true
+		}
+	}
+	return false
 }
 
 // listCommands use $PATH to find directories
