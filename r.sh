@@ -8,7 +8,7 @@ function pre() {
   unset R_AT_PROMPT
 
   # Keep reference to what command was executed
-  # local cmd="${1##*/}"
+  LAST_CMD="${1##*/}"
   local cmd=$*
 
   # Add current directory and command to `r`
@@ -29,7 +29,13 @@ function post() {
     return
   fi
 
-  # Post command logic
+  # Test if LAST_CMD was r then run any command selected
+  if [ "$LAST_CMD" == "r" ]; then
+    last_r_cmd=$(r --command)
+    eval $last_r_cmd
+
+    return
+  fi
 }
 
 # Run post after command
