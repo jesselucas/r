@@ -38,6 +38,25 @@ func main() {
 	}
 	defer db.Close()
 
+	// reset last command to blank
+	// set line as stored command
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("command"))
+		if err != nil {
+			return err
+		}
+
+		err = b.Put([]byte("command"), []byte(""))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Check if `results` flag is passed
 	// if *completePtr != "" {
 	// 	results := showResults(*completePtr)
@@ -184,7 +203,7 @@ func add(path string, promptCmd string) error {
 	}
 
 	// Add command to db
-	fmt.Printf("adding. cmd: %s, path: %s \n", promptCmd, path)
+	// fmt.Printf("adding. cmd: %s, path: %s \n", promptCmd, path)
 	return db.Update(func(tx *bolt.Tx) error {
 		directoryBucket, err := tx.CreateBucketIfNotExists([]byte("DirectoryBucket"))
 		if err != nil {
