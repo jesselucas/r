@@ -136,7 +136,7 @@ func readLine() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		// fmt.Println(line)
+
 		os.Exit(0)
 	}
 }
