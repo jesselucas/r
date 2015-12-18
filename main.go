@@ -113,7 +113,11 @@ func readLine() {
 			break
 		}
 
-		// TODO Only store if the command typed is in the list of commands
+		// Only execute if the command typed is in the list of results
+		if !containsCmd(strings.TrimSpace(line), results) {
+			fmt.Println("Command not found in `r` history.")
+			os.Exit(0)
+		}
 
 		// set line as stored command
 		err = db.Update(func(tx *bolt.Tx) error {
