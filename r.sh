@@ -32,6 +32,10 @@ function post() {
   # Test if LAST_CMD was r then run any command selected
   if [ "$LAST_CMD" == "r" ]; then
     last_r_cmd=$(r --command)
+    if [ -z "$last_r_cmd" ]; then
+      return
+    fi
+
     eval $last_r_cmd
 
     return
