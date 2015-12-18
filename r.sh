@@ -34,3 +34,25 @@ function post() {
 
 # Run post after command
 PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''post'
+
+# function _r_complete() {
+#   local cur prev opts args cmd
+#   COMPREPLY=()
+#   cmd="${COMP_WORDS[0]}" # command
+#   args="${COMP_LINE#r }"
+#   cur="${COMP_WORDS[COMP_CWORD]}"
+#
+#   # prev="${COMP_WORDS[COMP_CWORD-1]}" # previous word
+#
+#   if [ -z "$args" ]; then
+#     opts=$( r --complete "$cmd")
+#   else
+#     opts=$( r --complete $args)
+#   fi
+#   # opts=$( r --complete $args)
+#
+#   local IFS=$'\n'
+#   COMPREPLY=( $( compgen -W "$opts" -- "$cur" ) )
+#
+# }
+# complete -F _r_complete r
