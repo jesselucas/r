@@ -164,11 +164,21 @@ func readLine() {
 			break
 		}
 
+		line = strings.TrimSpace(line)
+
 		// Only execute if the command typed is in the list of results
-		if !containsCmd(strings.TrimSpace(line), results) {
+		if !containsCmd(line, results) {
 			fmt.Println("Command not found in `r` history.")
 			os.Exit(0)
 		}
+
+		// The command was found and will be executed so add it to the DB to update
+		wd, err := os.Getwd()
+		if err != nil {
+			fmt.Println("Error executing command.")
+			os.Exit(1)
+		}
+		add(wd, line)
 
 		// set line as stored command
 		err = db.Update(func(tx *bolt.Tx) error {
@@ -185,7 +195,8 @@ func readLine() {
 		})
 
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println("Error storing command.")
+			os.Exit(1)
 		}
 
 		os.Exit(0)
@@ -223,9 +234,9 @@ func showResults() ([]string, error) {
 		b := tx.Bucket([]byte("DirectoryBucket"))
 		pathBucket := b.Bucket([]byte(wd))
 		return pathBucket.ForEach(func(k, v []byte) error {
-			ci := commandInfo{}
+			// ci := commandInfo{}
 			fmt.Printf("%s: %s \n", string(k), string(v))
-			fmt.Printf("%s: %s \n", string(k), ci.NewFromString(string(v)))
+			// fmt.Printf("%s: %s \n", string(k), ci.NewFromString(string(v)))
 			results = append(results, string(k))
 			return nil
 		})
@@ -289,8 +300,6 @@ func add(path string, promptCmd string) error {
 			return nil
 		}
 
-		// TODO first look up command and then increment it's count
-
 		// Create commandInfo struct
 		ci := commandInfo{}
 		ci.time = time.Now()
@@ -315,7 +324,6 @@ func add(path string, promptCmd string) error {
 			// There is a previous command info value
 			// Let's update the count and time
 			ci = ci.Update(string(v))
-			fmt.Println(ci)
 		}
 
 		err = pathBucket.Put([]byte(promptCmd), []byte(ci.String()))
