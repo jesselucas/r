@@ -8,14 +8,61 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/chzyer/readline"
 )
 
 var db *bolt.DB
+
+// commandInfo struct is stored as the value to commands
+type commandInfo struct {
+	time  time.Time
+	count int
+}
+
+func (ci commandInfo) String() string {
+	return fmt.Sprintf("%s:%d", ci.time.String(), ci.count)
+}
+
+func (ci commandInfo) Update(ciString string) commandInfo {
+	info := strings.Split(os.Getenv("PATH"), ":")
+	newCI := commandInfo{}
+
+	count, err := strconv.Atoi(info[1])
+	if err != nil {
+		count = 0
+	}
+
+	newCI.time = time.Now()
+	newCI.count = count + 1
+
+	return newCI
+}
+
+func (ci commandInfo) NewFromString(ciString string) commandInfo {
+	info := strings.Split(os.Getenv("PATH"), ":")
+	newCI := commandInfo{}
+
+	date, err := time.Parse(time.RFC3339, info[0])
+	if err != nil {
+		date = time.Now()
+	}
+
+	count, err := strconv.Atoi(info[1])
+	if err != nil {
+		count = 0
+	}
+
+	newCI.time = date
+	newCI.count = count
+
+	return newCI
+}
 
 func main() {
 	// Setup flags
@@ -85,6 +132,8 @@ func main() {
 	readLine()
 }
 
+// readLine used the readline library create a prompt to
+// show the command history
 func readLine() {
 	// create completer from results
 	results, err := showResults()
@@ -141,6 +190,8 @@ func readLine() {
 	}
 }
 
+// printLastCommand is used with the --command flag
+// it shows the last command selected from the readline prompt
 func printLastCommand() {
 	var val string
 	db.Update(func(tx *bolt.Tx) error {
@@ -156,6 +207,8 @@ func printLastCommand() {
 	fmt.Println(val)
 }
 
+// showResults reads the boltdb and returns the command history
+// based on your current working directory
 func showResults() ([]string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -233,16 +286,43 @@ func add(path string, promptCmd string) error {
 
 		// TODO first look up command and then increment it's count
 
-		// Store just command and usage for overall most used sorting
-		err = cmdBucket.Put([]byte(promptCmd), []byte("1"))
+		// Create commandInfo struct
+		ci := commandInfo{}
+		ci.time = time.Now()
+		ci.count = 1
+
+		// Check if there is a command info value already
+		v := cmdBucket.Get([]byte(promptCmd))
+		if v != nil {
+			// There is a previous command info value
+			// Let's update the count and time
+			ci = ci.Update(string(v))
+		}
+
+		err = cmdBucket.Put([]byte(promptCmd), []byte(ci.String()))
 		if err != nil {
 			return err
 		}
 
-		return pathBucket.Put([]byte(promptCmd), []byte("1"))
+		// Now let's do the same thing for the pathBucket
+		v = pathBucket.Get([]byte(promptCmd))
+		if v != nil {
+			// There is a previous command info value
+			// Let's update the count and time
+			ci = ci.Update(string(v))
+		}
+
+		err = pathBucket.Put([]byte(promptCmd), []byte(ci.String()))
+
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 
+// containsCmd checks if a command string is is in a slice of strings
 func containsCmd(cmd string, commands []string) bool {
 	for _, c := range commands {
 		// check first command against list of commands
