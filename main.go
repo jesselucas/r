@@ -26,11 +26,12 @@ type commandInfo struct {
 }
 
 func (ci commandInfo) String() string {
-	return fmt.Sprintf("%s:%d", ci.time.String(), ci.count)
+	// Store the time in RFC3339 format for easy parsing
+	return fmt.Sprintf("%s%s%d", ci.time.Format(time.RFC3339), ",", ci.count)
 }
 
 func (ci commandInfo) Update(ciString string) commandInfo {
-	info := strings.Split(os.Getenv("PATH"), ":")
+	info := strings.Split(ciString, ",")
 	newCI := commandInfo{}
 
 	count, err := strconv.Atoi(info[1])
@@ -45,9 +46,10 @@ func (ci commandInfo) Update(ciString string) commandInfo {
 }
 
 func (ci commandInfo) NewFromString(ciString string) commandInfo {
-	info := strings.Split(os.Getenv("PATH"), ":")
+	info := strings.Split(ciString, ",")
 	newCI := commandInfo{}
 
+	// Parse the time as RFC3339 format
 	date, err := time.Parse(time.RFC3339, info[0])
 	if err != nil {
 		date = time.Now()
@@ -221,6 +223,9 @@ func showResults() ([]string, error) {
 		b := tx.Bucket([]byte("DirectoryBucket"))
 		pathBucket := b.Bucket([]byte(wd))
 		return pathBucket.ForEach(func(k, v []byte) error {
+			ci := commandInfo{}
+			fmt.Printf("%s: %s \n", string(k), string(v))
+			fmt.Printf("%s: %s \n", string(k), ci.NewFromString(string(v)))
 			results = append(results, string(k))
 			return nil
 		})
@@ -310,10 +315,10 @@ func add(path string, promptCmd string) error {
 			// There is a previous command info value
 			// Let's update the count and time
 			ci = ci.Update(string(v))
+			fmt.Println(ci)
 		}
 
 		err = pathBucket.Put([]byte(promptCmd), []byte(ci.String()))
-
 		if err != nil {
 			return err
 		}
