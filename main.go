@@ -250,13 +250,12 @@ func readLine() {
 
 		line = strings.TrimSpace(line)
 
-		cmdNames := namesOfCmds(results)
-
 		// Only execute if the command typed is in the list of results
-		if !containsCmd(line, cmdNames) {
-			fmt.Println("Command not found in `r` history.")
-			os.Exit(0)
-		}
+		// cmdNames := namesOfCmds(results)
+		// if !containsCmd(line, cmdNames) {
+		// 	fmt.Println("Command not found in `r` history.")
+		// 	os.Exit(0)
+		// }
 
 		// The command was found and will be executed so add it to the DB to update
 		wd, err := os.Getwd()
