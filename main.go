@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +20,12 @@ import (
 )
 
 var db *bolt.DB
+
+const (
+	globalCommandBucket = "GlobalCommandBucket"
+	directoryBucket     = "DirectoryBucket"
+	lastCommandBucket   = "lastCommandBucket"
+)
 
 type command struct {
 	name string
@@ -135,10 +142,17 @@ func main() {
 		os.Exit(0)
 	}
 
+	// check if the db buckets are empty
+	err = checkForHistory()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	// reset last command to blank
 	// set line as stored command
 	err = db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("command"))
+		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 		if err != nil {
 			return err
 		}
@@ -155,6 +169,41 @@ func main() {
 	}
 
 	readLine()
+}
+
+func checkForHistory() error {
+	// check if global bucket is empty. if it is return
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(globalCommandBucket))
+		if b == nil {
+			return errors.New("r doesn't have a history. Execute commands to build one")
+		}
+
+		// Check if current wording directy has a history
+		// if it doesn't return
+		wd, err := os.Getwd()
+		if err != nil {
+			return errors.New("Current directory doesn't have a history. Execute commands to build one")
+		}
+
+		b = tx.Bucket([]byte(directoryBucket))
+		if b == nil {
+			return errors.New("Current directory doesn't have a history. Execute commands to build one")
+		}
+
+		pathBucket := b.Bucket([]byte(wd))
+		if pathBucket == nil {
+			return errors.New("Current directory doesn't have a history. Execute commands to build one")
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // readLine used the readline library create a prompt to
@@ -212,7 +261,7 @@ func readLine() {
 
 		// set line as stored command
 		err = db.Update(func(tx *bolt.Tx) error {
-			b, err := tx.CreateBucketIfNotExists([]byte("command"))
+			b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 			if err != nil {
 				return err
 			}
@@ -238,7 +287,7 @@ func readLine() {
 func printLastCommand() {
 	var val string
 	db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("command"))
+		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 		if err != nil {
 			return err
 		}
@@ -258,7 +307,7 @@ func results(path string) ([]*command, error) {
 	// results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
 	var results []*command
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("DirectoryBucket"))
+		b := tx.Bucket([]byte(directoryBucket))
 		pathBucket := b.Bucket([]byte(path))
 		return pathBucket.ForEach(func(k, v []byte) error {
 			cmd := new(command)
@@ -299,7 +348,7 @@ func globalResults() ([]*command, error) {
 	// Now get all the commands stored
 	var results []*command
 	err := db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("CommandBucket"))
+		b := tx.Bucket([]byte(globalCommandBucket))
 		err := b.ForEach(func(k, v []byte) error {
 			command := new(command)
 			ci := new(commandInfo)
@@ -352,18 +401,18 @@ func add(path string, promptCmd string) error {
 
 	// Add command to db
 	err = db.Update(func(tx *bolt.Tx) error {
-		directoryBucket, err := tx.CreateBucketIfNotExists([]byte("DirectoryBucket"))
+		dBucket, err := tx.CreateBucketIfNotExists([]byte(directoryBucket))
 		if err != nil {
 			return err
 		}
 
-		pathBucket, err := directoryBucket.CreateBucketIfNotExists([]byte(path))
+		pathBucket, err := dBucket.CreateBucketIfNotExists([]byte(path))
 		if err != nil {
 			return err
 		}
 
 		// Store path and command for contextual path sorting
-		cmdBucket, err := tx.CreateBucketIfNotExists([]byte("CommandBucket"))
+		cmdBucket, err := tx.CreateBucketIfNotExists([]byte(globalCommandBucket))
 		if err != nil {
 			return err
 		}
@@ -445,7 +494,7 @@ func prune(path string) error {
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		if prunePath {
-			directoryBucket, err := tx.CreateBucketIfNotExists([]byte("DirectoryBucket"))
+			directoryBucket, err := tx.CreateBucketIfNotExists([]byte(directoryBucket))
 			if err != nil {
 				return err
 			}
@@ -463,7 +512,7 @@ func prune(path string) error {
 		// Prune stored global commands
 		if pruneGlobal {
 			// Store path and command for contextual path sorting
-			cmdBucket, err := tx.CreateBucketIfNotExists([]byte("CommandBucket"))
+			cmdBucket, err := tx.CreateBucketIfNotExists([]byte(globalCommandBucket))
 			if err != nil {
 				return err
 			}
