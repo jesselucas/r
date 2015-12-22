@@ -120,6 +120,11 @@ func main() {
 	// Check if `add` flag is passed
 	if *addPtr != "" {
 		args := strings.Split(*addPtr, ":")
+		if len(args) != 2 {
+			fmt.Println("Could not add command.")
+			os.Exit(1)
+		}
+
 		err := add(args[0], args[1])
 		if err != nil {
 			log.Fatal(err)
