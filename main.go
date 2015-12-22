@@ -17,6 +17,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/chzyer/readline"
+	"github.com/forestgiant/semver"
 )
 
 var db *bolt.DB
@@ -90,6 +91,12 @@ func (s byTime) Swap(i, j int) {
 }
 
 func main() {
+	// Set Semantic Version
+	err := semver.SetVersion("0.1.0")
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Setup flags
 	// statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
 	// completePtr := flag.String("complete", "", "show all results for `r`")
