@@ -1,0 +1,5 @@
+package: main
+import:
+- package: github.com/boltdb/bolt
+- package: github.com/chzyer/readline
+- package: github.com/forestgiant/semver
