@@ -154,7 +154,12 @@ func main() {
 // show the command history
 func readLine() {
 	// create completer from results
-	results, err := results()
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	results, err := results(wd)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -166,7 +171,7 @@ func readLine() {
 	var completer = readline.NewPrefixCompleter(pcItems...)
 
 	rl, err := readline.NewEx(&readline.Config{
-		Prompt:       "> ",
+		Prompt:       "r> ",
 		AutoComplete: completer,
 	})
 	if err != nil {
@@ -240,17 +245,14 @@ func printLastCommand() {
 
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
-func results() ([]*command, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
+func results(path string) ([]*command, error) {
+	// dir := filepath.Dir(path)
 
 	// results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
 	var results []*command
-	err = db.View(func(tx *bolt.Tx) error {
+	err := db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("DirectoryBucket"))
-		pathBucket := b.Bucket([]byte(wd))
+		pathBucket := b.Bucket([]byte(path))
 		return pathBucket.ForEach(func(k, v []byte) error {
 			cmd := new(command)
 			ci := new(commandInfo)
@@ -286,11 +288,50 @@ func results() ([]*command, error) {
 
 }
 
+func globalResults() ([]*command, error) {
+	// Now get all the commands stored
+	var results []*command
+	err := db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("CommandBucket"))
+		err := b.ForEach(func(k, v []byte) error {
+			command := new(command)
+			ci := new(commandInfo)
+			command.name = string(k)
+			command.info = ci.NewFromString(string(v))
+			results = append(results, command)
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sorty by last command first
+	sort.Sort(byTime(results))
+	// for _, cmd := range results {
+	// 	fmt.Printf("%s: %s \n", cmd.name, cmd.info.time)
+	// }
+
+	return results, nil
+}
+
 // add checks if command being passed is in the listCommands
 // then stores the command and workding directory
 func add(path string, promptCmd string) error {
 	// get the first command in the promptCmd string
 	cmd := strings.Split(promptCmd, " ")[0]
+
+	// Don't store if the command is r
+	if cmd == "r" {
+		return nil
+	}
 
 	commands, err := listCommands()
 	if err != nil {
@@ -303,8 +344,7 @@ func add(path string, promptCmd string) error {
 	}
 
 	// Add command to db
-	// fmt.Printf("adding. cmd: %s, path: %s \n", promptCmd, path)
-	return db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		directoryBucket, err := tx.CreateBucketIfNotExists([]byte("DirectoryBucket"))
 		if err != nil {
 			return err
@@ -319,11 +359,6 @@ func add(path string, promptCmd string) error {
 		cmdBucket, err := tx.CreateBucketIfNotExists([]byte("CommandBucket"))
 		if err != nil {
 			return err
-		}
-
-		// Don't store if the command is r
-		if cmd == "r" {
-			return nil
 		}
 
 		// Create commandInfo struct
@@ -359,8 +394,91 @@ func add(path string, promptCmd string) error {
 
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
+	// now prune the older commands
+	err = prune(path)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
+// prune deletes commands from a directory bucket and overall bucket
+func prune(path string) error {
+	// TODO move this to an environment variable
+	numberToPruneDir := 20
+	numberToPruneGlobal := 100
+	pruneGlobal := true
+	prunePath := true
+
+	results, err := results(path)
+	if err != nil {
+		return err
+	}
+
+	if len(results) <= numberToPruneDir {
+		prunePath = false
+	}
+
+	// List the global commands
+	globalResults, err := globalResults()
+	if err != nil {
+		return err
+	}
+
+	// set pruneGlobal to true if there isn't enough
+	if len(globalResults) <= numberToPruneGlobal {
+		pruneGlobal = false
+	}
+
+	err = db.Update(func(tx *bolt.Tx) error {
+		if prunePath {
+			directoryBucket, err := tx.CreateBucketIfNotExists([]byte("DirectoryBucket"))
+			if err != nil {
+				return err
+			}
+
+			pathBucket, err := directoryBucket.CreateBucketIfNotExists([]byte(path))
+			if err != nil {
+				return err
+			}
+
+			pruneDirResults := results[numberToPruneDir:]
+			for _, cmd := range pruneDirResults {
+				pathBucket.Delete([]byte(cmd.name))
+			}
+		}
+		// Prune stored global commands
+		if pruneGlobal {
+			// Store path and command for contextual path sorting
+			cmdBucket, err := tx.CreateBucketIfNotExists([]byte("CommandBucket"))
+			if err != nil {
+				return err
+			}
+
+			pruneGlobalResults := globalResults[numberToPruneGlobal:]
+			for _, cmd := range pruneGlobalResults {
+				cmdBucket.Delete([]byte(cmd.name))
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// namesOfCmds takes a slice of command structs and return
+// a slice with just their names
 func namesOfCmds(cmds []*command) []string {
 	var names []string
 	for _, cmd := range cmds {
