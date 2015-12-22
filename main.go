@@ -117,6 +117,8 @@ func main() {
 		os.Exit(0)
 	}
 
+	// TODO add a global flag to see all command history
+
 	// Check if `add` flag is passed
 	if *addPtr != "" {
 		args := strings.Split(*addPtr, ":")
