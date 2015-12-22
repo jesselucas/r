@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -19,35 +20,36 @@ import (
 
 var db *bolt.DB
 
+type command struct {
+	name string
+	info *commandInfo
+}
+
 // commandInfo struct is stored as the value to commands
 type commandInfo struct {
 	time  time.Time
 	count int
 }
 
-func (ci commandInfo) String() string {
+func (ci *commandInfo) String() string {
 	// Store the time in RFC3339 format for easy parsing
 	return fmt.Sprintf("%s%s%d", ci.time.Format(time.RFC3339), ",", ci.count)
 }
 
-func (ci commandInfo) Update(ciString string) commandInfo {
+func (ci *commandInfo) Update(ciString string) {
 	info := strings.Split(ciString, ",")
-	newCI := commandInfo{}
 
 	count, err := strconv.Atoi(info[1])
 	if err != nil {
 		count = 0
 	}
 
-	newCI.time = time.Now()
-	newCI.count = count + 1
-
-	return newCI
+	ci.time = time.Now()
+	ci.count = count + 1
 }
 
-func (ci commandInfo) NewFromString(ciString string) commandInfo {
+func (ci *commandInfo) NewFromString(ciString string) *commandInfo {
 	info := strings.Split(ciString, ",")
-	newCI := commandInfo{}
 
 	// Parse the time as RFC3339 format
 	date, err := time.Parse(time.RFC3339, info[0])
@@ -60,10 +62,24 @@ func (ci commandInfo) NewFromString(ciString string) commandInfo {
 		count = 0
 	}
 
-	newCI.time = date
-	newCI.count = count
+	ci.time = date
+	ci.count = count
 
-	return newCI
+	return ci
+}
+
+type byTime []*command
+
+func (s byTime) Len() int {
+	return len(s)
+}
+
+func (s byTime) Less(i, j int) bool {
+	return s[i].info.time.After(s[j].info.time)
+}
+
+func (s byTime) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 func main() {
@@ -138,14 +154,14 @@ func main() {
 // show the command history
 func readLine() {
 	// create completer from results
-	results, err := showResults()
+	results, err := results()
 	if err != nil {
 		log.Panic(err)
 	}
 
 	var pcItems []*readline.PrefixCompleter
 	for _, result := range results {
-		pcItems = append(pcItems, readline.PcItem(result))
+		pcItems = append(pcItems, readline.PcItem(result.name))
 	}
 	var completer = readline.NewPrefixCompleter(pcItems...)
 
@@ -166,8 +182,10 @@ func readLine() {
 
 		line = strings.TrimSpace(line)
 
+		cmdNames := namesOfCmds(results)
+
 		// Only execute if the command typed is in the list of results
-		if !containsCmd(line, results) {
+		if !containsCmd(line, cmdNames) {
 			fmt.Println("Command not found in `r` history.")
 			os.Exit(0)
 		}
@@ -222,22 +240,24 @@ func printLastCommand() {
 
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
-func showResults() ([]string, error) {
+func results() ([]*command, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 
 	// results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
-	var results []string
+	var results []*command
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("DirectoryBucket"))
 		pathBucket := b.Bucket([]byte(wd))
 		return pathBucket.ForEach(func(k, v []byte) error {
-			// ci := commandInfo{}
-			fmt.Printf("%s: %s \n", string(k), string(v))
-			// fmt.Printf("%s: %s \n", string(k), ci.NewFromString(string(v)))
-			results = append(results, string(k))
+			cmd := new(command)
+			ci := new(commandInfo)
+			cmd.name = string(k)
+			cmd.info = ci.NewFromString(string(v))
+
+			results = append(results, cmd)
 			return nil
 		})
 	})
@@ -245,6 +265,12 @@ func showResults() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Sorty by last command first
+	sort.Sort(byTime(results))
+	// for _, cmd := range results {
+	// 	fmt.Printf("%s: %s \n", cmd.name, cmd.info.time)
+	// }
 
 	return results, nil
 
@@ -301,7 +327,7 @@ func add(path string, promptCmd string) error {
 		}
 
 		// Create commandInfo struct
-		ci := commandInfo{}
+		ci := new(commandInfo)
 		ci.time = time.Now()
 		ci.count = 1
 
@@ -310,7 +336,7 @@ func add(path string, promptCmd string) error {
 		if v != nil {
 			// There is a previous command info value
 			// Let's update the count and time
-			ci = ci.Update(string(v))
+			ci.Update(string(v))
 		}
 
 		err = cmdBucket.Put([]byte(promptCmd), []byte(ci.String()))
@@ -323,7 +349,7 @@ func add(path string, promptCmd string) error {
 		if v != nil {
 			// There is a previous command info value
 			// Let's update the count and time
-			ci = ci.Update(string(v))
+			ci.Update(string(v))
 		}
 
 		err = pathBucket.Put([]byte(promptCmd), []byte(ci.String()))
@@ -333,6 +359,15 @@ func add(path string, promptCmd string) error {
 
 		return nil
 	})
+}
+
+func namesOfCmds(cmds []*command) []string {
+	var names []string
+	for _, cmd := range cmds {
+		names = append(names, cmd.name)
+	}
+
+	return names
 }
 
 // containsCmd checks if a command string is is in a slice of strings
