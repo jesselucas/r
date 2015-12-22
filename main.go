@@ -391,6 +391,12 @@ func add(path string, promptCmd string) error {
 	// get the first command in the promptCmd string
 	cmd := strings.Split(promptCmd, " ")[0]
 
+	// TODO This is a hack. figure out why
+	// bash var is being sent to add
+	if cmd == `$LAST_CMD" == "r"` {
+		return nil
+	}
+
 	// Don't store if the command is r
 	if cmd == "r" {
 		return nil
