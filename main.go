@@ -392,7 +392,7 @@ func add(path string, promptCmd string) error {
 
 	// TODO This is a hack. figure out why
 	// bash var is being sent to add
-	if cmd == `$LAST_CMD" == "r"` {
+	if strings.Contains(cmd, `[ "$LAST_CMD" == "r" ]`) {
 		return nil
 	}
 
