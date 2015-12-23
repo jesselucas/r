@@ -309,6 +309,10 @@ func results(boltPath string, path string) ([]*command, error) {
 			cmd.name = string(k)
 			cmd.info = ci.NewFromString(string(v))
 
+			if cmd.name == `[ "$LAST_CMD" = "r" ]` {
+				return nil
+			}
+
 			results = append(results, cmd)
 			return nil
 		})
