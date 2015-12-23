@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # This will run before any command is executed.
-function pre() {
+pre() {
   if [ -z "$R_AT_PROMPT" ]; then
     return
   fi
@@ -22,7 +22,7 @@ trap 'pre $BASH_COMMAND' DEBUG
 # This will run after the execution of the previous full command line.  We don't
 # want `post` to execute when first starting a bash session (FIRST_PROMPT)
 R_FIRST_PROMPT=1
-function post() {
+post() {
   R_AT_PROMPT=1
 
   if [ -n "$R_FIRST_PROMPT" ]; then
@@ -31,7 +31,7 @@ function post() {
   fi
 
   # Test if LAST_CMD was r then run any command selected
-  if [ "$LAST_CMD" == "r" ]; then
+  if [ "$LAST_CMD" = "r" ]; then
     last_r_cmd=$(r --command)
     if [ -z "$last_r_cmd" ]; then
       return
@@ -44,7 +44,7 @@ function post() {
 }
 
 # Run post after command
-PROMPT_COMMAND="$PROMPT_COMMAND"$'\n''post'
+PROMPT_COMMAND="$PROMPT_COMMAND;post"
 
 # function _r_complete() {
 #   local cur prev opts args cmd
