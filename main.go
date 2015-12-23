@@ -19,9 +19,7 @@ import (
 	"github.com/forestgiant/semver"
 )
 
-var (
-	boltPath string
-)
+var boltPath string
 
 const (
 	globalCommandBucket = "GlobalCommandBucket"
@@ -49,7 +47,7 @@ func main() {
 	boltPath = filepath.Join(usr.HomeDir, ".r.db")
 
 	if *commandPtr {
-		err = printLastCommand()
+		err = printLastCommand(boltPath)
 		if err != nil {
 			os.Exit(1)
 		}
@@ -75,7 +73,7 @@ func main() {
 	}
 
 	// check if the db buckets are empty
-	err = checkForHistory()
+	err = checkForHistory(boltPath)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -83,7 +81,7 @@ func main() {
 
 	// reset last command to blank
 	// set line as stored command
-	err = resetLastCommand()
+	err = resetLastCommand(boltPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,7 +89,7 @@ func main() {
 	readLine()
 }
 
-func resetLastCommand() error {
+func resetLastCommand(boltPath string) error {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error resetLastCommand")
@@ -120,7 +118,7 @@ func resetLastCommand() error {
 	return nil
 }
 
-func checkForHistory() error {
+func checkForHistory(boltPath string) error {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error checkForHistory")
@@ -172,7 +170,7 @@ func readLine() {
 		log.Panic(err)
 	}
 
-	results, err := results(wd)
+	results, err := results(boltPath, wd)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -221,7 +219,7 @@ func readLine() {
 		}
 
 		// store last command
-		err = storeLastCommand(line)
+		err = storeLastCommand(boltPath, line)
 		if err != nil {
 			fmt.Println("Error storing command.")
 			os.Exit(1)
@@ -231,7 +229,7 @@ func readLine() {
 	}
 }
 
-func storeLastCommand(line string) error {
+func storeLastCommand(boltPath string, line string) error {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error storeLastCommand")
@@ -263,7 +261,7 @@ func storeLastCommand(line string) error {
 
 // printLastCommand is used with the --command flag
 // it shows the last command selected from the readline prompt
-func printLastCommand() error {
+func printLastCommand(boltPath string) error {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error printLastCommand")
@@ -293,7 +291,7 @@ func printLastCommand() error {
 
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
-func results(path string) ([]*command, error) {
+func results(boltPath string, path string) ([]*command, error) {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error results")
@@ -342,7 +340,7 @@ func results(path string) ([]*command, error) {
 
 }
 
-func globalResults() ([]*command, error) {
+func globalResults(boltPath string) ([]*command, error) {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error globalResults")
@@ -486,7 +484,7 @@ func prune(path string) error {
 	pruneGlobal := true
 	prunePath := true
 
-	results, err := results(path)
+	results, err := results(boltPath, path)
 	if err != nil {
 		return err
 	}
@@ -496,7 +494,7 @@ func prune(path string) error {
 	}
 
 	// List the global commands
-	globalResults, err := globalResults()
+	globalResults, err := globalResults(boltPath)
 	if err != nil {
 		return err
 	}
