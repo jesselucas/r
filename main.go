@@ -10,7 +10,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -20,75 +19,15 @@ import (
 	"github.com/forestgiant/semver"
 )
 
-var db *bolt.DB
+var (
+	boltPath string
+)
 
 const (
 	globalCommandBucket = "GlobalCommandBucket"
 	directoryBucket     = "DirectoryBucket"
 	lastCommandBucket   = "lastCommandBucket"
 )
-
-type command struct {
-	name string
-	info *commandInfo
-}
-
-// commandInfo struct is stored as the value to commands
-type commandInfo struct {
-	time  time.Time
-	count int
-}
-
-func (ci *commandInfo) String() string {
-	// Store the time in RFC3339 format for easy parsing
-	return fmt.Sprintf("%s%s%d", ci.time.Format(time.RFC3339), ",", ci.count)
-}
-
-func (ci *commandInfo) Update(ciString string) {
-	info := strings.Split(ciString, ",")
-
-	count, err := strconv.Atoi(info[1])
-	if err != nil {
-		count = 0
-	}
-
-	ci.time = time.Now()
-	ci.count = count + 1
-}
-
-func (ci *commandInfo) NewFromString(ciString string) *commandInfo {
-	info := strings.Split(ciString, ",")
-
-	// Parse the time as RFC3339 format
-	date, err := time.Parse(time.RFC3339, info[0])
-	if err != nil {
-		date = time.Now()
-	}
-
-	count, err := strconv.Atoi(info[1])
-	if err != nil {
-		count = 0
-	}
-
-	ci.time = date
-	ci.count = count
-
-	return ci
-}
-
-type byTime []*command
-
-func (s byTime) Len() int {
-	return len(s)
-}
-
-func (s byTime) Less(i, j int) bool {
-	return s[i].info.time.After(s[j].info.time)
-}
-
-func (s byTime) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
 
 func main() {
 	// Set Semantic Version
@@ -98,8 +37,6 @@ func main() {
 	}
 
 	// Setup flags
-	// statsPtr := flag.Bool("stats", false, "show stats and usage of `r`")
-	// completePtr := flag.String("complete", "", "show all results for `r`")
 	commandPtr := flag.Bool("command", false, "show last command selected from `r`")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
@@ -109,25 +46,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	boltPath := filepath.Join(usr.HomeDir, ".r.db")
-	// It will be created if it doesn't exist.
-	db, err = bolt.Open(boltPath, 0600, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	// Check if `results` flag is passed
-	// if *completePtr != "" {
-	// 	results := showResults(*completePtr)
-	// 	for _, result := range results {
-	// 		fmt.Println(result)
-	// 	}
-	// 	os.Exit(0)
-	// }
+	boltPath = filepath.Join(usr.HomeDir, ".r.db")
 
 	if *commandPtr {
-		printLastCommand()
+		err = printLastCommand()
+		if err != nil {
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 
@@ -158,6 +83,21 @@ func main() {
 
 	// reset last command to blank
 	// set line as stored command
+	err = resetLastCommand()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	readLine()
+}
+
+func resetLastCommand() error {
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error resetLastCommand")
+		return err
+	}
+
 	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 		if err != nil {
@@ -171,16 +111,24 @@ func main() {
 		return nil
 	})
 
+	db.Close()
+
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	readLine()
+	return nil
 }
 
 func checkForHistory() error {
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error checkForHistory")
+		return err
+	}
+
 	// check if global bucket is empty. if it is return
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(globalCommandBucket))
 		if b == nil {
 			return errors.New("r doesn't have a history. Execute commands to build one")
@@ -205,6 +153,8 @@ func checkForHistory() error {
 
 		return nil
 	})
+
+	db.Close()
 
 	if err != nil {
 		return err
@@ -265,20 +215,13 @@ func readLine() {
 		}
 		add(wd, line)
 
-		// set line as stored command
-		err = db.Update(func(tx *bolt.Tx) error {
-			b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			fmt.Println("Error storing command.")
+			os.Exit(1)
+		}
 
-			err = b.Put([]byte("command"), []byte(line))
-			if err != nil {
-				return err
-			}
-			return nil
-		})
-
+		// store last command
+		err = storeLastCommand(line)
 		if err != nil {
 			fmt.Println("Error storing command.")
 			os.Exit(1)
@@ -288,11 +231,47 @@ func readLine() {
 	}
 }
 
+func storeLastCommand(line string) error {
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error storeLastCommand")
+		return err
+	}
+
+	// set line as stored command
+	err = db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
+		if err != nil {
+			return err
+		}
+
+		err = b.Put([]byte("command"), []byte(line))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	db.Close()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // printLastCommand is used with the --command flag
 // it shows the last command selected from the readline prompt
-func printLastCommand() {
+func printLastCommand() error {
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error printLastCommand")
+		return err
+	}
+
 	var val string
-	db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 		if err != nil {
 			return err
@@ -302,17 +281,28 @@ func printLastCommand() {
 		return nil
 	})
 
+	db.Close()
+
+	if err != nil {
+		return err
+	}
+
 	fmt.Println(val)
+	return nil
 }
 
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
 func results(path string) ([]*command, error) {
-	// dir := filepath.Dir(path)
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error results")
+		return nil, err
+	}
 
 	// results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
 	var results []*command
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(directoryBucket))
 		pathBucket := b.Bucket([]byte(path))
 		return pathBucket.ForEach(func(k, v []byte) error {
@@ -325,6 +315,8 @@ func results(path string) ([]*command, error) {
 			return nil
 		})
 	})
+
+	db.Close()
 
 	if err != nil {
 		return nil, err
@@ -351,9 +343,15 @@ func results(path string) ([]*command, error) {
 }
 
 func globalResults() ([]*command, error) {
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error globalResults")
+		return nil, err
+	}
+
 	// Now get all the commands stored
 	var results []*command
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(globalCommandBucket))
 		err := b.ForEach(func(k, v []byte) error {
 			command := new(command)
@@ -370,6 +368,8 @@ func globalResults() ([]*command, error) {
 
 		return nil
 	})
+
+	db.Close()
 
 	if err != nil {
 		return nil, err
@@ -409,6 +409,12 @@ func add(path string, promptCmd string) error {
 	// check if the command is valid
 	if !containsCmd(cmd, commands) {
 		return nil
+	}
+
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error add")
+		return err
 	}
 
 	// Add command to db
@@ -463,6 +469,8 @@ func add(path string, promptCmd string) error {
 		return nil
 	})
 
+	db.Close()
+
 	if err != nil {
 		return err
 	}
@@ -504,6 +512,12 @@ func prune(path string) error {
 		pruneGlobal = false
 	}
 
+	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		fmt.Println("error prune")
+		return err
+	}
+
 	err = db.Update(func(tx *bolt.Tx) error {
 		if prunePath {
 			directoryBucket, err := tx.CreateBucketIfNotExists([]byte(directoryBucket))
@@ -537,6 +551,8 @@ func prune(path string) error {
 
 		return nil
 	})
+
+	db.Close()
 
 	if err != nil {
 		return err
