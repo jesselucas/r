@@ -37,7 +37,11 @@ post() {
       return
     fi
 
+    # execute command
     eval $last_r_cmd
+
+    # save command to bash history
+    history -s $last_r_cmd
 
     return
   fi
