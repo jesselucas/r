@@ -36,11 +36,16 @@ func main() {
 	}
 
 	// Setup flags
+	globalUsage := "show all commands stored by `r`"
+	globalPtr := flag.Bool("global", false, globalUsage)
 	commandPtr := flag.Bool("command", false, "show last command selected from `r`")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
+
+	// Setup shorthand flags
+	flag.BoolVar(globalPtr, "g", false, globalUsage+" (shorthand)")
 	flag.Parse()
 
-	// Setup bolt db
+	// Setup bolt db path
 	usr, err := user.Current()
 	if err != nil {
 		log.Fatal(err)
@@ -73,6 +78,8 @@ func main() {
 		os.Exit(0)
 	}
 
+	//
+
 	// check if the db buckets are empty
 	err = checkForHistory(boltPath)
 	if err != nil {
@@ -87,7 +94,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	readLine()
+	readLine(*globalPtr)
 }
 
 func resetLastCommand(boltPath string) error {
@@ -164,16 +171,24 @@ func checkForHistory(boltPath string) error {
 
 // readLine used the readline library create a prompt to
 // show the command history
-func readLine() {
+func readLine(global bool) {
 	// create completer from results
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Panic(err)
 	}
 
-	results, err := results(boltPath, wd)
-	if err != nil {
-		log.Panic(err)
+	var results []*command
+	if !global {
+		results, err = resultsDirectory(boltPath, wd)
+		if err != nil {
+			log.Panic(err)
+		}
+	} else {
+		results, err = resultsGlobal(boltPath)
+		if err != nil {
+			log.Panic(err)
+		}
 	}
 
 	var pcItems []*readline.PrefixCompleter
@@ -292,7 +307,7 @@ func printLastCommand(boltPath string) error {
 
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
-func results(boltPath string, path string) ([]*command, error) {
+func resultsDirectory(boltPath string, path string) ([]*command, error) {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error results")
@@ -345,7 +360,7 @@ func results(boltPath string, path string) ([]*command, error) {
 
 }
 
-func globalResults(boltPath string) ([]*command, error) {
+func resultsGlobal(boltPath string) ([]*command, error) {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error globalResults")
@@ -497,7 +512,7 @@ func prune(path string) error {
 	pruneGlobal := true
 	prunePath := true
 
-	results, err := results(boltPath, path)
+	results, err := resultsDirectory(boltPath, path)
 	if err != nil {
 		return err
 	}
@@ -507,7 +522,7 @@ func prune(path string) error {
 	}
 
 	// List the global commands
-	globalResults, err := globalResults(boltPath)
+	globalResults, err := resultsGlobal(boltPath)
 	if err != nil {
 		return err
 	}
