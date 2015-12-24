@@ -24,6 +24,9 @@ Usage of r:
     show all commands stored by r
   -g
     show all commands stored by r (shorthand)
+  -u	sort commands by usage rather than last used (shorthand)
+  -usage
+    sort commands by usage rather than last used
 ```
 ### Example
 * Type `r` in any directory and it will prompt `r>`.
@@ -34,18 +37,18 @@ Usage of r:
 ## Notes
 * Set the Directory and Global history in your `.bashrc`
 ```
-# r directory history
-export R_DIRHISTORY=30
-
-# r global history
-export R_GLOBALHISTORY=100
+# r settings
+export R_DIRHISTORY=30 # total to save for directory history
+export R_GLOBALHISTORY=100 # total to save for global history
+# export R_SORTBYUSAGE=1 # turn this on to default sorting by usage
 ```
 
 ## TODOs
 * Write test!
 * ~~Make history limit an environment variable~~
 * ~~Create flag to see history for all directories~~
-* Create flag to sort by most used rather than the default last used.
+* ~~Create flag to sort by most used rather than the default last used.~~
+* Create brew formula
 * Improve stability of r.sh
 * Make compatible with zsh
 
