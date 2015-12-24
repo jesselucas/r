@@ -29,7 +29,7 @@ export R_GLOBALHISTORY=100
 
 ## TODOs
 * Write test!
-* Make history limit an environment variable
+* ~~Make history limit an environment variable~~
 * Create flag to see history for all directories
 * Improve stability of r.sh
 * Make compatible with zsh
