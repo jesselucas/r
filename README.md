@@ -1,4 +1,6 @@
 #r
+[![Build Status](https://travis-ci.org/jesselucas/r.svg?branch=master)](https://travis-ci.org/jesselucas/r)
+
 A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 
 ## Requirements
