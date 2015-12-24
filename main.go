@@ -34,7 +34,7 @@ const (
 
 func main() {
 	// Set Semantic Version
-	err := semver.SetVersion("0.1.0")
+	err := semver.SetVersion("0.2.0")
 	if err != nil {
 		log.Fatal(err)
 	}
