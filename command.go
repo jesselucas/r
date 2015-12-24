@@ -55,6 +55,7 @@ func (ci *commandInfo) NewFromString(ciString string) *commandInfo {
 	return ci
 }
 
+// Sort by last used
 type byTime []*command
 
 func (s byTime) Len() int {
@@ -66,5 +67,20 @@ func (s byTime) Less(i, j int) bool {
 }
 
 func (s byTime) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
+// Sort by usage
+type byUsage []*command
+
+func (s byUsage) Len() int {
+	return len(s)
+}
+
+func (s byUsage) Less(i, j int) bool {
+	return s[i].info.count > s[j].info.count
+}
+
+func (s byUsage) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }

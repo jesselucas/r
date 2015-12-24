@@ -20,7 +20,11 @@ import (
 	"github.com/forestgiant/semver"
 )
 
-var boltPath string
+var (
+	boltPath     string
+	sortUsagePtr *bool
+	sortTimePtr  *bool
+)
 
 const (
 	globalCommandBucket = "GlobalCommandBucket"
@@ -36,13 +40,23 @@ func main() {
 	}
 
 	// Setup flags
-	globalUsage := "show all commands stored by `r`"
+	globalUsage := "show all commands stored"
 	globalPtr := flag.Bool("global", false, globalUsage)
-	commandPtr := flag.Bool("command", false, "show last command selected from `r`")
-	addPtr := flag.String("add", "", "show stats and usage of `r`")
-
-	// Setup shorthand flags
 	flag.BoolVar(globalPtr, "g", false, globalUsage+" (shorthand)")
+
+	// Change sorting flag based on environment variables
+	if os.Getenv("R_SORTBYUSAGE") == "1" {
+		sortTimeUsage := "sort commands by directory"
+		sortTimePtr = flag.Bool("time", false, sortTimeUsage)
+		flag.BoolVar(sortTimePtr, "t", false, sortTimeUsage+" (shorthand)")
+	} else {
+		sortUsageUsage := "sort commands by usage rather than last used"
+		sortUsagePtr = flag.Bool("usage", false, sortUsageUsage)
+		flag.BoolVar(sortUsagePtr, "u", false, sortUsageUsage+" (shorthand)")
+	}
+
+	commandPtr := flag.Bool("command", false, "show last command selected")
+	addPtr := flag.String("add", "", "adds command and path to history")
 	flag.Parse()
 
 	// Setup bolt db path
@@ -133,7 +147,7 @@ func checkForHistory(boltPath string) error {
 		return err
 	}
 
-	// check if global bucket is empty. if it is return
+	// Check if global bucket is empty. if it is return
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(globalCommandBucket))
 		if b == nil {
@@ -172,7 +186,7 @@ func checkForHistory(boltPath string) error {
 // readLine used the readline library create a prompt to
 // show the command history
 func readLine(global bool) {
-	// create completer from results
+	// Create completer from results
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Panic(err)
@@ -234,7 +248,7 @@ func readLine(global bool) {
 			os.Exit(1)
 		}
 
-		// store last command
+		// Store last command
 		err = storeLastCommand(boltPath, line)
 		if err != nil {
 			fmt.Println("Error storing command.")
@@ -252,7 +266,7 @@ func storeLastCommand(boltPath string, line string) error {
 		return err
 	}
 
-	// set line as stored command
+	// Set line as stored command
 	err = db.Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(lastCommandBucket))
 		if err != nil {
@@ -305,6 +319,25 @@ func printLastCommand(boltPath string) error {
 	return nil
 }
 
+func sortCommands(results []*command) {
+	// Check for environment variable for usage sorting
+	if os.Getenv("R_SORTBYUSAGE") == "1" {
+		if !*sortTimePtr {
+			sort.Sort(byUsage(results))
+		} else {
+			sort.Sort(byTime(results))
+		}
+		return
+	}
+
+	// Check for usage flag
+	if !*sortUsagePtr {
+		sort.Sort(byTime(results))
+	} else {
+		sort.Sort(byUsage(results))
+	}
+}
+
 // showResults reads the boltdb and returns the command history
 // based on your current working directory
 func resultsDirectory(boltPath string, path string) ([]*command, error) {
@@ -314,7 +347,6 @@ func resultsDirectory(boltPath string, path string) ([]*command, error) {
 		return nil, err
 	}
 
-	// results := []string{"git status", "git clone", "go install", "cd /Users/jesse/", "cd /Users/jesse/gocode/src/github.com/jesselucas", "ls -Glah"}
 	var results []*command
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(directoryBucket))
@@ -340,24 +372,15 @@ func resultsDirectory(boltPath string, path string) ([]*command, error) {
 		return nil, err
 	}
 
-	// Sorty by last command first
-	sort.Sort(byTime(results))
+	// Sort commands
+	sortCommands(results)
+
+	// Print results (Used for testing)
 	// for _, cmd := range results {
-	// 	fmt.Printf("%s: %s \n", cmd.name, cmd.info.time)
+	// 	fmt.Printf("%s: %s \n", cmd.name, cmd.info.count)
 	// }
 
 	return results, nil
-
-	// filter
-	// var filtered []string
-	// for _, result := range results {
-	// 	if strings.HasPrefix(result, input) {
-	// 		filtered = append(filtered, result)
-	// 	}
-	// }
-	//
-	// return filtered
-
 }
 
 func resultsGlobal(boltPath string) ([]*command, error) {
@@ -393,8 +416,10 @@ func resultsGlobal(boltPath string) ([]*command, error) {
 		return nil, err
 	}
 
-	// Sorty by last command first
-	sort.Sort(byTime(results))
+	// Sort commands
+	sortCommands(results)
+
+	// Print results (Used for testing)
 	// for _, cmd := range results {
 	// 	fmt.Printf("%s: %s \n", cmd.name, cmd.info.time)
 	// }
