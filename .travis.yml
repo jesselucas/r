@@ -1,4 +1,7 @@
 language: go
 go:
   - 1.5
-script: go test
+env:
+  - GO15VENDOREXPERIMENT=1
+script:
+  - go test
