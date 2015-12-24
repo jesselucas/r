@@ -4,7 +4,9 @@
 A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 
 ## Requirements
-`r` currently only works with bash and you must add `r.sh` to your `.bashrc`
+* OS X / Linux
+* Bash
+* Must add `r.sh` to your `.bashrc`
 
 ## Installation
 * `go get -u github.com/jesselucas/r`
@@ -12,6 +14,18 @@ A contextual, path based, bash history. Like `ctrl-r` but for each directory.
   * ex. `. $GOPATH/src/github.com/jesselucas/r/r.sh`
 
 ## Usage
+By default `r` shows bash history per directory and is sorted by last used.
+
+You can see all history by using the `-global` flag.
+
+```
+Usage of r:
+  -global
+    show all commands stored by r
+  -g
+    show all commands stored by r (shorthand)
+```
+### Example
 * Type `r` in any directory and it will prompt `r>`.
 * Press `tab` key to see all history.
 * Or start typing command and press `tab` to filter history.
