@@ -30,7 +30,8 @@ export R_GLOBALHISTORY=100
 ## TODOs
 * Write test!
 * ~~Make history limit an environment variable~~
-* Create flag to see history for all directories
+* ~~Create flag to see history for all directories~~
+* Create flag to sort by most used rather than the default last used.
 * Improve stability of r.sh
 * Make compatible with zsh
 
