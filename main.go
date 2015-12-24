@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,11 @@ import (
 	"github.com/forestgiant/semver"
 )
 
-var boltPath string
+var (
+	boltPath            string
+	numberToPruneDir    int
+	numberToPruneGlobal int
+)
 
 const (
 	globalCommandBucket = "GlobalCommandBucket"
@@ -38,6 +43,17 @@ func main() {
 	commandPtr := flag.Bool("command", false, "show last command selected from `r`")
 	addPtr := flag.String("add", "", "show stats and usage of `r`")
 	flag.Parse()
+
+	// Set number to prune from envar
+	numberToPruneDir, err = strconv.Atoi(os.Getenv("R_DIRHISTORY"))
+	if err != nil {
+		numberToPruneDir = 30
+	}
+
+	numberToPruneGlobal, err = strconv.Atoi(os.Getenv("R_GLOBALHISTORY"))
+	if err != nil {
+		numberToPruneGlobal = 100
+	}
 
 	// Setup bolt db
 	usr, err := user.Current()
@@ -482,9 +498,6 @@ func add(path string, promptCmd string) error {
 
 // prune deletes commands from a directory bucket and overall bucket
 func prune(path string) error {
-	// TODO move this to an environment variable
-	numberToPruneDir := 20
-	numberToPruneGlobal := 100
 	pruneGlobal := true
 	prunePath := true
 

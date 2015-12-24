@@ -16,7 +16,14 @@ A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 * Use `tab` or `arrow` keys to navigate history items.
 
 ## Notes
-* Each directories history is limited to the last `20` commands.
+* Set the Directory and Global history in your `.bashrc`
+```
+# r directory history
+export R_DIRHISTORY=30
+
+# r global history
+export R_GLOBALHISTORY=100
+```
 
 ## TODOs
 * Write test!
