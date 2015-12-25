@@ -57,7 +57,7 @@ func main() {
 
 	commandPtr := flag.Bool("command", false, "show last command selected")
 	addPtr := flag.String("add", "", "adds command and path to history")
-	installPtr := flag.Bool("install", false, "installs r.sh to .bashrc")
+	installPtr := flag.Bool("install", false, fmt.Sprintf("installs %s to .bashrc", rSourceName))
 	flag.Parse()
 
 	// Setup bolt db path
@@ -119,7 +119,7 @@ func main() {
 
 func install() error {
 	if installed() {
-		return errors.New("r is already installed. Found .r.sh in .bashrc")
+		return fmt.Errorf("r is already installed. Found %s in .bashrc", rSourceName)
 	}
 
 	// install .r.sh
@@ -151,7 +151,7 @@ func install() error {
 			return err
 		}
 
-		fmt.Println("Installed .r.sh to:", bashrc)
+		fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
 		fmt.Println("Restart you bash shell to use `r`")
 
 		return nil
