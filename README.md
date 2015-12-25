@@ -11,7 +11,7 @@ A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 ## Installation
 * `go get -u github.com/jesselucas/r`
 * add `r.sh` to your `.bashrc`
-  * ex. `. $GOPATH/src/github.com/jesselucas/r/r.sh`
+  * ex. `. $GOPATH/src/github.com/jesselucas/r/.r.sh`
 
 ## Usage
 By default `r` shows bash history per directory and is sorted by last used.
@@ -49,7 +49,7 @@ export R_GLOBALHISTORY=100 # total to save for global history
 * ~~Create flag to see history for all directories~~
 * ~~Create flag to sort by most used rather than the default last used.~~
 * Create brew formula
-* Improve stability of r.sh
+* Improve stability of .r.sh
 * Make compatible with zsh
 
 ## Special Thanks

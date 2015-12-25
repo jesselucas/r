@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -30,6 +29,7 @@ const (
 	globalCommandBucket = "GlobalCommandBucket"
 	directoryBucket     = "DirectoryBucket"
 	lastCommandBucket   = "lastCommandBucket"
+	rSourceName         = ".r.sh"
 )
 
 func main() {
@@ -57,14 +57,15 @@ func main() {
 
 	commandPtr := flag.Bool("command", false, "show last command selected")
 	addPtr := flag.String("add", "", "adds command and path to history")
+	installPtr := flag.Bool("install", false, "installs r.sh to .bashrc")
 	flag.Parse()
 
 	// Setup bolt db path
-	usr, err := user.Current()
+	homeDir, err := homeDirectory()
 	if err != nil {
 		log.Fatal(err)
 	}
-	boltPath = filepath.Join(usr.HomeDir, ".r.db")
+	boltPath = filepath.Join(homeDir, ".r.db")
 
 	if *commandPtr {
 		err = printLastCommand(boltPath)
@@ -73,8 +74,6 @@ func main() {
 		}
 		os.Exit(0)
 	}
-
-	// TODO add a global flag to see all command history
 
 	// Check if `add` flag is passed
 	if *addPtr != "" {
@@ -92,7 +91,14 @@ func main() {
 		os.Exit(0)
 	}
 
-	//
+	// Check if .r.sh is installed
+	if *installPtr {
+		err := install()
+		if err != nil {
+			fmt.Println(err)
+		}
+		os.Exit(0)
+	}
 
 	// check if the db buckets are empty
 	err = checkForHistory(boltPath)
@@ -109,6 +115,49 @@ func main() {
 	}
 
 	readLine(*globalPtr)
+}
+
+func install() error {
+	if installed() {
+		return errors.New("r is already installed. Found .r.sh in .bashrc")
+	}
+
+	// install .r.sh
+	bashrc, err := bashrcPath()
+	if err == nil {
+		// Get home directory
+		homeDir, err := homeDirectory()
+		if err != nil {
+			return err
+		}
+
+		// Create .r.sh file in homeDirectory
+		f, err := os.Create(filepath.Join(homeDir, rSourceName))
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		f.WriteString(rBashFile)
+
+		// Source .r.sh in bashrc
+		rcFile, err := os.OpenFile(bashrc, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		defer rcFile.Close()
+
+		rSourceFile := fmt.Sprintf("\n# r sourced from r -install \n. %s/%s", homeDir, rSourceName)
+		if _, err = rcFile.WriteString(rSourceFile); err != nil {
+			return err
+		}
+
+		fmt.Println("Installed .r.sh to:", bashrc)
+		fmt.Println("Restart you bash shell to use `r`")
+
+		return nil
+	}
+
+	return errors.New("Could not find .bashrc file")
 }
 
 func resetLastCommand(boltPath string) error {
