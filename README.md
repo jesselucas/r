@@ -6,12 +6,13 @@ A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 ## Requirements
 * OS X / Linux
 * Bash
-* Must add `r.sh` to your `.bashrc`
+* Must add `.r.sh` to your `.bashrc` or use `r -install`
 
 ## Installation
 * `go get -u github.com/jesselucas/r`
 * add `r.sh` to your `.bashrc`
   * ex. `. $GOPATH/src/github.com/jesselucas/r/.r.sh`
+* or use `r -install` which will add `.r.sh` to home directory and source in `.bashrc`
 
 ## Usage
 By default `r` shows bash history per directory and is sorted by last used.
@@ -20,6 +21,8 @@ You can see all history by using the `-global` flag.
 
 ```
 Usage of r:
+  -install
+    installs r.sh to .bashrc
   -global
     show all commands stored by r
   -g
