@@ -13,6 +13,7 @@ const (
 	numerals     string = "0123456789"
 	alphabet            = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	alphaNumeric        = alphabet + numerals
+	SemVersion          = "0.2.1"
 )
 
 var (
@@ -83,6 +84,8 @@ func SetVersion(s string) error {
 	if err != nil {
 		return err
 	}
+
+	// Tag git repo if one exist
 
 	// Create version flag
 	v.CheckFlag()
