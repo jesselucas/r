@@ -9,9 +9,13 @@ A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 * Must add `.r.sh` to your `.bashrc` or use `r -install`
 
 ## Installation
-* `go get -u github.com/jesselucas/r`
+### Homebrew:
+`brew tap jesselucas/r`
 
-### Install for Bash
+`brew install r`
+
+### Go
+* `go get -u github.com/jesselucas/r`
 * `r -install` which will add `.r.sh` to home directory and source in `.bashrc`
 * or manually add `.r.sh` to your `.bashrc`
   * ex. `. $GOPATH/src/github.com/jesselucas/r/.r.sh`
