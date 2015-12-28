@@ -34,7 +34,7 @@ const (
 
 func main() {
 	// Set Semantic Version
-	err := semver.SetVersion("0.3.0")
+	err := semver.SetVersion("0.3.1")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,6 +96,7 @@ func main() {
 		err := install()
 		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
 		}
 		os.Exit(0)
 	}
@@ -119,7 +120,8 @@ func main() {
 
 func install() error {
 	if installed() {
-		return fmt.Errorf("r is already installed. Found %s in .bashrc", rSourceName)
+		fmt.Printf("r is already installed. Found %s in .bashrc \n", rSourceName)
+		return nil
 	}
 
 	// install .r.sh
@@ -151,9 +153,8 @@ func install() error {
 			return err
 		}
 
-		fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
-		fmt.Println("Restart you bash shell to use `r`")
-
+		// fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
+		fmt.Println("r successfully installed! Restart your bash shell.")
 		return nil
 	}
 
