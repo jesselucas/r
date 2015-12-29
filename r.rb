@@ -1,9 +1,9 @@
 class R < Formula
   desc "r is a contextual, path based, bash history."
   homepage "https://jesselucas.github.io/r/"
-  url "https://github.com/jesselucas/r/archive/0.3.1.tar.gz"
-  version "0.3.1"
-  sha256 "57dabcabb46bacc3a263af13cc23d0b0514687a4a4da82e9704a4b1f29bfd31e"
+  url "https://github.com/jesselucas/r/archive/0.3.2.tar.gz"
+  version "0.3.2"
+  sha256 "311b682da633c70d18bb4729bf8e135ac9beb0a61f5f7ad5d3a7cf6df41b7192"
 
   depends_on "go" => :build
 
