@@ -21,8 +21,8 @@ class R < Formula
   end
 
   test do
-    actual = system("r -install")
-    expected = true
+    actual = pipe_output("#{bin}/r -install")
+    expected = "r successfully installed! Restart your bash shell."
     actualVersion = pipe_output("#{bin}/r -version")
     assert_block do
       actual == expected
