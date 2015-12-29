@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -26,7 +27,7 @@ func homeDirectory() (string, error) {
 	return usr.HomeDir, nil
 }
 
-func bashrcPath() (string, error) {
+func bashPath() (string, error) {
 	homeDir, err := homeDirectory()
 	if err != nil {
 		return "", err
@@ -38,18 +39,18 @@ func bashrcPath() (string, error) {
 		return bashrc, nil
 	}
 
-	return "", errors.New("Couldn't find .bashrc")
-}
-
-func installed() bool {
-	// Check if there is a .bashrc
-	bashrc, err := bashrcPath()
-	if err != nil {
-		return false
+	// Check if there is a .bash_profile
+	bashProfile := filepath.Join(homeDir, ".bash_profile")
+	if fileExists(bashProfile) {
+		return bashProfile, nil
 	}
 
+	return "", errors.New("Couldn't find .bashrc or .bash_profile")
+}
+
+func checkFileForString(path string, s string) bool {
 	// read .bashrc to make sure it hasn't been installed
-	input, err := ioutil.ReadFile(bashrc)
+	input, err := ioutil.ReadFile(path)
 	if err != nil {
 		return false
 	}
@@ -57,10 +58,56 @@ func installed() bool {
 	lines := strings.Split(string(input), "\n")
 
 	for _, line := range lines {
-		if strings.Contains(line, rSourceName) {
+		if strings.Contains(line, s) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func installed() bool {
+	// Check if there is a .bashrc
+	path, err := bashPath()
+	if err != nil {
+		return false // Doesn't have bash_profile or bashrc
+	}
+
+	if checkFileForString(path, rSourceName) {
+		return true
+	}
+
+	return false
+}
+
+func sourceR(path string) error {
+	// Get home directory
+	homeDir, err := homeDirectory()
+	if err != nil {
+		return err
+	}
+
+	// Create .r.sh file in homeDirectory
+	f, err := os.Create(filepath.Join(homeDir, rSourceName))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	f.WriteString(rBashFile)
+
+	// Source .r.sh in bashrc
+	bashFile, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer bashFile.Close()
+
+	rSourceFile := fmt.Sprintf("\n# r sourced from r -install \n. %s/%s", homeDir, rSourceName)
+	if _, err = bashFile.WriteString(rSourceFile); err != nil {
+		return err
+	}
+
+	// fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
+	fmt.Println("r successfully installed! Restart your bash shell.")
+	return nil
 }

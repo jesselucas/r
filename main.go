@@ -34,7 +34,7 @@ const (
 
 func main() {
 	// Set Semantic Version
-	err := semver.SetVersion("0.3.1")
+	err := semver.SetVersion("0.3.2")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -120,45 +120,22 @@ func main() {
 
 func install() error {
 	if installed() {
-		fmt.Printf("r is already installed. Found %s in .bashrc \n", rSourceName)
+		fmt.Println("r is already installed.")
 		return nil
 	}
 
 	// install .r.sh
-	bashrc, err := bashrcPath()
+	path, err := bashPath()
 	if err == nil {
-		// Get home directory
-		homeDir, err := homeDirectory()
+		err = sourceR(path)
 		if err != nil {
 			return err
 		}
 
-		// Create .r.sh file in homeDirectory
-		f, err := os.Create(filepath.Join(homeDir, rSourceName))
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		f.WriteString(rBashFile)
-
-		// Source .r.sh in bashrc
-		rcFile, err := os.OpenFile(bashrc, os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		defer rcFile.Close()
-
-		rSourceFile := fmt.Sprintf("\n# r sourced from r -install \n. %s/%s", homeDir, rSourceName)
-		if _, err = rcFile.WriteString(rSourceFile); err != nil {
-			return err
-		}
-
-		// fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
-		fmt.Println("r successfully installed! Restart your bash shell.")
 		return nil
 	}
 
-	return errors.New("Could not find .bashrc file")
+	return errors.New("Could not install r")
 }
 
 func resetLastCommand(boltPath string) error {
