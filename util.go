@@ -107,7 +107,5 @@ func sourceR(path string) error {
 		return err
 	}
 
-	// fmt.Printf("Installed %s to: %s \n", rSourceName, bashrc)
-	fmt.Println("r successfully installed! Restart your bash shell.")
 	return nil
 }

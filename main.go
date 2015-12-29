@@ -98,6 +98,8 @@ func main() {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
+		fmt.Println("r successfully installed! Restart your bash shell.")
 		os.Exit(0)
 	}
 
@@ -120,8 +122,7 @@ func main() {
 
 func install() error {
 	if installed() {
-		fmt.Println("r is already installed.")
-		return nil
+		return errors.New("r is already installed")
 	}
 
 	// install .r.sh
