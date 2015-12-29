@@ -3,7 +3,7 @@ class R < Formula
   homepage "https://jesselucas.github.io/r/"
   url "https://github.com/jesselucas/r/archive/0.3.2.tar.gz"
   version "0.3.2"
-  sha256 "311b682da633c70d18bb4729bf8e135ac9beb0a61f5f7ad5d3a7cf6df41b7192"
+  sha256 "b8acb6d54e4cac80eda17e6946ebccc998dede3388a0c6ddf1c04c0b0e52fa74"
 
   depends_on "go" => :build
 
