@@ -35,7 +35,7 @@ post() {
   # Don't add if the status errored
   if [ "$last_code" -eq 0 ]; then
     # Add current directory and command to r
-    r --add "$R_PWD:$CMD"
+    r --add "$R_PWD^_$CMD"
   fi
 
   # Test if LAST_CMD was r then run any command selected

@@ -77,7 +77,7 @@ func main() {
 
 	// Check if `add` flag is passed
 	if *addPtr != "" {
-		args := strings.Split(*addPtr, ":")
+		args := strings.Split(*addPtr, "^_")
 		if len(args) != 2 {
 			fmt.Println("Could not add command.")
 			os.Exit(1)
