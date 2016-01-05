@@ -1,14 +1,13 @@
 #r
 [![Build Status](https://travis-ci.org/jesselucas/r.svg?branch=master)](https://travis-ci.org/jesselucas/r)
 
-A contextual, path based, bash history. Like `ctrl-r` but for each directory.
+`r` stores all successfully executed commands per directory. Allowing you to easily see what command you last executed. You can also sort by most used commands, recently used and see commands from all directories.
 
 ![Terminal Demo](https://dl.dropboxusercontent.com/s/3w7h92ksza871g8/r_terminal.gif)
 
 ## Requirements
 * OS X / Linux
 * Bash
-* Must add `.r.sh` to your `.bashrc` or use `r -install`
 
 ## Installation
 ### Homebrew:
