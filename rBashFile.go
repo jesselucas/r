@@ -10,12 +10,11 @@ pre() {
   unset R_AT_PROMPT
 
   # Keep reference to what command was executed
-  LAST_CMD="${1##*/}"
-  local cmd=$*
+  R_LAST_CMD="${1##*/}"
+  export R_PWD
+  R_PWD=$(pwd)
+  CMD=$*
 
-  # TODO Don't add if the status errored
-  # Add current directory and command to r
-  r --add "$(\pwd):$cmd"
 }
 
 # Set trap to reun pre before command
@@ -32,8 +31,16 @@ post() {
     return
   fi
 
+  local last_code=$?
+  # Don't add if the status errored
+  if [ "$last_code" -eq 0 ]; then
+    # Add current directory and command to r
+    r --add "$R_PWD:$CMD"
+  fi
+
   # Test if LAST_CMD was r then run any command selected
-  if [ "$LAST_CMD" = "r" ]; then
+  if [ "$R_LAST_CMD" = "r" ]; then
+    local last_r_cmd
     last_r_cmd=$(r --command)
     if [ -z "$last_r_cmd" ]; then
       return
