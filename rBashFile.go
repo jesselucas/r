@@ -57,5 +57,5 @@ post() {
 }
 
 # Run post after command
-PROMPT_COMMAND="$PROMPT_COMMAND;post"
+PROMPT_COMMAND="${PROMPT_COMMAND}"$'\n'"post;";
 `
