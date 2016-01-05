@@ -3,6 +3,8 @@
 
 A contextual, path based, bash history. Like `ctrl-r` but for each directory.
 
+![Terminal Demo](https://dl.dropboxusercontent.com/s/3w7h92ksza871g8/r_terminal.gif)
+
 ## Requirements
 * OS X / Linux
 * Bash
@@ -62,4 +64,5 @@ export R_GLOBALHISTORY=100 # total to save for global history
 * Make compatible with zsh
 
 ## Special Thanks
+* [github.com/boltdb/bolt](https://github.com/boltdb/bolt)
 * [github.com/chzyer/readline](https://github.com/chzyer/readline)
