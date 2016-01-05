@@ -667,6 +667,7 @@ func listCommands() ([]string, error) {
 
 	// created buffered error chan
 	errc := make(chan error, 1)
+	defer close(errc)
 
 	// sync go routines
 	var wg sync.WaitGroup
