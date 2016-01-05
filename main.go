@@ -102,7 +102,7 @@ func main() {
 	}
 
 	// check if the db buckets are empty
-	err = checkForHistory(boltPath)
+	err = checkForHistory(boltPath, *globalPtr)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -168,7 +168,7 @@ func resetLastCommand(boltPath string) error {
 	return nil
 }
 
-func checkForHistory(boltPath string) error {
+func checkForHistory(boltPath string, global bool) error {
 	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error checkForHistory")
@@ -184,19 +184,21 @@ func checkForHistory(boltPath string) error {
 
 		// Check if current wording directy has a history
 		// if it doesn't return
-		wd, err := os.Getwd()
-		if err != nil {
-			return errors.New("Current directory doesn't have a history. Execute commands to build one")
-		}
+		if !global {
+			wd, err := os.Getwd()
+			if err != nil {
+				return errors.New("Current directory doesn't have a history. Execute commands to build one")
+			}
 
-		b = tx.Bucket([]byte(directoryBucket))
-		if b == nil {
-			return errors.New("Current directory doesn't have a history. Execute commands to build one")
-		}
+			b = tx.Bucket([]byte(directoryBucket))
+			if b == nil {
+				return errors.New("Current directory doesn't have a history. Execute commands to build one")
+			}
 
-		pathBucket := b.Bucket([]byte(wd))
-		if pathBucket == nil {
-			return errors.New("Current directory doesn't have a history. Execute commands to build one")
+			pathBucket := b.Bucket([]byte(wd))
+			if pathBucket == nil {
+				return errors.New("Current directory doesn't have a history. Execute commands to build one")
+			}
 		}
 
 		return nil
