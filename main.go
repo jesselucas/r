@@ -26,9 +26,9 @@ var (
 )
 
 const (
-	globalCommandBucket = "GlobalCommandBucket"
-	directoryBucket     = "DirectoryBucket"
-	lastCommandBucket   = "lastCommandBucket"
+	globalCommandBucket = "GlobalCommandBucket" // BoltDB bucket storing all commands
+	directoryBucket     = "DirectoryBucket"     // BoltDB bucket storying commands per directory
+	lastCommandBucket   = "lastCommandBucket"   // BoltDB bucket storing the last command r selected
 	rSourceName         = ".r.sh"
 )
 
