@@ -1,4 +1,4 @@
-package main
+package r
 
 import (
 	"io/ioutil"
@@ -48,7 +48,11 @@ func TestResetLastCommand(t *testing.T) {
 		t.Error(err)
 	}
 
-	resetLastCommand(db.TestPath)
+	// Test r Session
+	s := new(Session)
+	s.BoltPath = db.TestPath
+
+	s.ResetLastCommand()
 
 	err = db.Open()
 	if err != nil {
@@ -84,7 +88,12 @@ func TestCheckForHistory(t *testing.T) {
 		t.Error(err)
 	}
 
-	err = checkForHistory(db.TestPath, false)
+	// Test r Session
+	s := new(Session)
+	s.BoltPath = db.TestPath
+	s.Global = false
+
+	err = s.CheckForHistory()
 	if err.Error() != "r doesn't have a history. Execute commands to build one" {
 		t.Error("There shouldn't be a history")
 	}
@@ -104,7 +113,7 @@ func TestCheckForHistory(t *testing.T) {
 	}
 	db.DB.Close() // Close boltDB so checkForHistory can open
 
-	err = checkForHistory(db.TestPath, false)
+	err = s.CheckForHistory()
 	if err.Error() != "Current directory doesn't have a history. Execute commands to build one" {
 		t.Error("There should be a global bucket", err)
 	}
@@ -124,7 +133,7 @@ func TestCheckForHistory(t *testing.T) {
 	}
 	db.DB.Close() // Close boltDB so checkForHistory can open
 
-	err = checkForHistory(db.TestPath, false)
+	err = s.CheckForHistory()
 	if err.Error() != "Current directory doesn't have a history. Execute commands to build one" {
 		t.Error("There should be a global bucket", err)
 	}

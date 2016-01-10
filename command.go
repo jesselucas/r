@@ -1,4 +1,4 @@
-package main
+package r
 
 import (
 	"fmt"
@@ -7,23 +7,26 @@ import (
 	"time"
 )
 
-type command struct {
-	name string
-	info *commandInfo
+// Command struct stores the name and CommandInfo for each
+// shell command stored in the r database
+type Command struct {
+	Name string
+	Info *CommandInfo
 }
 
-// commandInfo struct is stored as the value to commands
-type commandInfo struct {
-	time  time.Time
-	count int
+// CommandInfo struct is stored as the value to commands
+type CommandInfo struct {
+	Time  time.Time
+	Count int
 }
 
-func (ci *commandInfo) String() string {
+func (ci *CommandInfo) String() string {
 	// Store the time in RFC3339 format for easy parsing
-	return fmt.Sprintf("%s%s%d", ci.time.Format(time.RFC3339), ",", ci.count)
+	return fmt.Sprintf("%s%s%d", ci.Time.Format(time.RFC3339), ",", ci.Count)
 }
 
-func (ci *commandInfo) Update(ciString string) {
+// Update method will update the time and count of CommandInfo
+func (ci *CommandInfo) Update(ciString string) {
 	info := strings.Split(ciString, ",")
 
 	count, err := strconv.Atoi(info[1])
@@ -31,11 +34,12 @@ func (ci *commandInfo) Update(ciString string) {
 		count = 0
 	}
 
-	ci.time = time.Now()
-	ci.count = count + 1
+	ci.Time = time.Now()
+	ci.Count = count + 1
 }
 
-func (ci *commandInfo) NewFromString(ciString string) *commandInfo {
+// NewFromString creates a new CommandInfo struct from a string
+func (ci *CommandInfo) NewFromString(ciString string) *CommandInfo {
 	info := strings.Split(ciString, ",")
 
 	// Parse the time as RFC3339 format
@@ -49,38 +53,44 @@ func (ci *commandInfo) NewFromString(ciString string) *commandInfo {
 		count = 0
 	}
 
-	ci.time = date
-	ci.count = count
+	ci.Time = date
+	ci.Count = count
 
 	return ci
 }
 
-// Sort by last used
-type byTime []*command
+// ByTime sorts by last used
+type byTime []*Command
 
+// Len used for sorting
 func (s byTime) Len() int {
 	return len(s)
 }
 
+// Less used for sorting
 func (s byTime) Less(i, j int) bool {
-	return s[i].info.time.After(s[j].info.time)
+	return s[i].Info.Time.After(s[j].Info.Time)
 }
 
+// Swap used for sorting
 func (s byTime) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-// Sort by usage
-type byUsage []*command
+// ByUsage sorts by usage
+type byUsage []*Command
 
+// Len used for sorting
 func (s byUsage) Len() int {
 	return len(s)
 }
 
+// Less used for sorting
 func (s byUsage) Less(i, j int) bool {
-	return s[i].info.count > s[j].info.count
+	return s[i].Info.Count > s[j].Info.Count
 }
 
+// Swap used for sorting
 func (s byUsage) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
