@@ -51,8 +51,12 @@ func main() {
 
 	// Create new r Session
 	s := new(r.Session)
-	s.SortUsage = *sortUsagePtr
-	s.SortTime = *sortTimePtr
+	if os.Getenv("R_SORTBYUSAGE") == "1" {
+		s.SortTime = *sortTimePtr
+	} else {
+		s.SortUsage = *sortUsagePtr
+	}
+	s.Global = *globalPtr
 
 	// Setup bolt db path
 	homeDir, err := homeDirectory()
