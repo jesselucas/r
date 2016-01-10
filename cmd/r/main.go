@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/chzyer/readline"
-	"github.com/forestgiant/semver"
 	"github.com/jesselucas/r"
 )
 
@@ -19,16 +18,14 @@ var (
 )
 
 func main() {
-	// Set Semantic Version
-	err := semver.SetVersion(r.Version)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	// Setup flags
 	globalUsage := "show all commands stored"
 	globalPtr := flag.Bool("global", false, globalUsage)
 	flag.BoolVar(globalPtr, "g", false, globalUsage+" (shorthand)")
+
+	versionUsage := "Semantic Version of r"
+	versionPtr := flag.Bool("version", false, versionUsage)
+	flag.BoolVar(versionPtr, "v", false, versionUsage+" (shorthand)")
 
 	// Change sorting flag based on environment variables
 	var sortTimePtr *bool
@@ -93,6 +90,12 @@ func main() {
 	err = s.ResetLastCommand()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// if the version flag is passed print the r package version and exit
+	if *versionPtr {
+		fmt.Println(r.Version)
+		os.Exit(0)
 	}
 
 	// Check if .r.sh is installed
