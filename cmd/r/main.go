@@ -89,6 +89,12 @@ func main() {
 		os.Exit(0)
 	}
 
+	// reset last command to blank
+	err = s.ResetLastCommand()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Check if .r.sh is installed
 	if *installPtr {
 		err := install()
@@ -104,13 +110,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
-	}
-
-	// reset last command to blank
-	// set line as stored command
-	err = s.ResetLastCommand()
-	if err != nil {
-		log.Fatal(err)
 	}
 
 	readLine(s)
