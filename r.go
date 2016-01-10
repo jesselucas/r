@@ -1,13 +1,10 @@
-package main
+package r
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,132 +12,32 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/chzyer/readline"
-	"github.com/forestgiant/semver"
-)
-
-var (
-	boltPath     string
-	sortUsagePtr *bool
-	sortTimePtr  *bool
 )
 
 const (
 	globalCommandBucket = "GlobalCommandBucket" // BoltDB bucket storing all commands
 	directoryBucket     = "DirectoryBucket"     // BoltDB bucket storying commands per directory
 	lastCommandBucket   = "lastCommandBucket"   // BoltDB bucket storing the last command r selected
-	rSourceName         = ".r.sh"
+
+	// Version is semantic version for package r and cmd/r
+	Version = "0.4.0"
 )
 
-func main() {
-	// Set Semantic Version
-	err := semver.SetVersion("0.3.3")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Setup flags
-	globalUsage := "show all commands stored"
-	globalPtr := flag.Bool("global", false, globalUsage)
-	flag.BoolVar(globalPtr, "g", false, globalUsage+" (shorthand)")
-
-	// Change sorting flag based on environment variables
-	if os.Getenv("R_SORTBYUSAGE") == "1" {
-		sortTimeUsage := "sort commands by directory"
-		sortTimePtr = flag.Bool("time", false, sortTimeUsage)
-		flag.BoolVar(sortTimePtr, "t", false, sortTimeUsage+" (shorthand)")
-	} else {
-		sortUsageUsage := "sort commands by usage rather than last used"
-		sortUsagePtr = flag.Bool("usage", false, sortUsageUsage)
-		flag.BoolVar(sortUsagePtr, "u", false, sortUsageUsage+" (shorthand)")
-	}
-
-	commandPtr := flag.Bool("command", false, "show last command selected")
-	addPtr := flag.String("add", "", "adds command and path to history")
-	installPtr := flag.Bool("install", false, fmt.Sprintf("installs %s to .bashrc", rSourceName))
-	flag.Parse()
-
-	// Setup bolt db path
-	homeDir, err := homeDirectory()
-	if err != nil {
-		log.Fatal(err)
-	}
-	boltPath = filepath.Join(homeDir, ".r.db")
-
-	if *commandPtr {
-		err = printLastCommand(boltPath)
-		if err != nil {
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	// Check if `add` flag is passed
-	if *addPtr != "" {
-		args := strings.Split(*addPtr, "^_")
-		if len(args) != 2 {
-			fmt.Println("Could not add command.")
-			os.Exit(1)
-		}
-
-		err := add(args[0], args[1])
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		os.Exit(0)
-	}
-
-	// Check if .r.sh is installed
-	if *installPtr {
-		err := install()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	// check if the db buckets are empty
-	err = checkForHistory(boltPath, *globalPtr)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	// reset last command to blank
-	// set line as stored command
-	err = resetLastCommand(boltPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	readLine(*globalPtr)
+// Session is created every time r cmd is ran
+type Session struct {
+	// Path to store and reference boltdb
+	BoltPath string
+	// Used to store the bool value from the r cmd global flag
+	Global bool
+	// SortUsagePtr used to check if the usage flag was used
+	SortUsage bool
+	// SortTimePtr used to check if the time flag was used
+	SortTime bool
 }
 
-func install() error {
-	if installed() {
-		fmt.Println("r is already installed.")
-		return nil
-	}
-
-	// install .r.sh
-	path, err := bashPath()
-	if err == nil {
-		err = sourceR(path)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println("r successfully installed! Restart your bash shell.")
-		return nil
-	}
-
-	return errors.New("Could not install r")
-}
-
-func resetLastCommand(boltPath string) error {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+// ResetLastCommand clears the value in the lastCommandBucket
+func (s *Session) ResetLastCommand() error {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error resetLastCommand")
 		return err
@@ -168,8 +65,10 @@ func resetLastCommand(boltPath string) error {
 	return nil
 }
 
-func checkForHistory(boltPath string, global bool) error {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+// CheckForHistory makes sure a directory has history or if the global bool is true
+// it will make sure the global bucket has a history
+func (s *Session) CheckForHistory() error {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error checkForHistory")
 		return err
@@ -184,7 +83,7 @@ func checkForHistory(boltPath string, global bool) error {
 
 		// Check if current wording directy has a history
 		// if it doesn't return
-		if !global {
+		if !s.Global {
 			wd, err := os.Getwd()
 			if err != nil {
 				return errors.New("Current directory doesn't have a history. Execute commands to build one")
@@ -213,84 +112,9 @@ func checkForHistory(boltPath string, global bool) error {
 	return nil
 }
 
-// readLine used the readline library create a prompt to
-// show the command history
-func readLine(global bool) {
-	// Create completer from results
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	var results []*command
-	if !global {
-		results, err = resultsDirectory(boltPath, wd)
-		if err != nil {
-			log.Panic(err)
-		}
-	} else {
-		results, err = resultsGlobal(boltPath)
-		if err != nil {
-			log.Panic(err)
-		}
-	}
-
-	var pcItems []*readline.PrefixCompleter
-	for _, result := range results {
-		pcItems = append(pcItems, readline.PcItem(result.name))
-	}
-	var completer = readline.NewPrefixCompleter(pcItems...)
-
-	rl, err := readline.NewEx(&readline.Config{
-		Prompt:       "r> ",
-		AutoComplete: completer,
-	})
-	if err != nil {
-		log.Panic(err)
-	}
-	defer rl.Close()
-
-	for {
-		line, err := rl.Readline()
-		if err != nil { // io.EOF
-			break
-		}
-
-		line = strings.TrimSpace(line)
-
-		// Only execute if the command typed is in the list of results
-		// cmdNames := namesOfCmds(results)
-		// if !containsCmd(line, cmdNames) {
-		// 	fmt.Println("Command not found in `r` history.")
-		// 	os.Exit(0)
-		// }
-
-		// The command was found and will be executed so add it to the DB to update
-		wd, err := os.Getwd()
-		if err != nil {
-			fmt.Println("Error executing command.")
-			os.Exit(1)
-		}
-		add(wd, line)
-
-		if err != nil {
-			fmt.Println("Error storing command.")
-			os.Exit(1)
-		}
-
-		// Store last command
-		err = storeLastCommand(boltPath, line)
-		if err != nil {
-			fmt.Println("Error storing command.")
-			os.Exit(1)
-		}
-
-		os.Exit(0)
-	}
-}
-
-func storeLastCommand(boltPath string, line string) error {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+// StoreLastCommand takes the line string and stores it
+func (s *Session) StoreLastCommand(line string) error {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error storeLastCommand")
 		return err
@@ -319,10 +143,10 @@ func storeLastCommand(boltPath string, line string) error {
 	return nil
 }
 
-// printLastCommand is used with the --command flag
+// PrintLastCommand is used with the r cli --command flag
 // it shows the last command selected from the readline prompt
-func printLastCommand(boltPath string) error {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+func (s *Session) PrintLastCommand() error {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error printLastCommand")
 		return err
@@ -349,10 +173,10 @@ func printLastCommand(boltPath string) error {
 	return nil
 }
 
-func sortCommands(results []*command) {
+func (s *Session) sortCommands(results []*Command) {
 	// Check for environment variable for usage sorting
 	if os.Getenv("R_SORTBYUSAGE") == "1" {
-		if !*sortTimePtr {
+		if !s.SortTime {
 			sort.Sort(byUsage(results))
 		} else {
 			sort.Sort(byTime(results))
@@ -361,33 +185,33 @@ func sortCommands(results []*command) {
 	}
 
 	// Check for usage flag
-	if !*sortUsagePtr {
+	if !s.SortUsage {
 		sort.Sort(byTime(results))
 	} else {
 		sort.Sort(byUsage(results))
 	}
 }
 
-// showResults reads the boltdb and returns the command history
+// ResultsDirectory reads the boltdb and returns the command history
 // based on your current working directory
-func resultsDirectory(boltPath string, path string) ([]*command, error) {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+func (s *Session) ResultsDirectory(path string) ([]*Command, error) {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error results")
 		return nil, err
 	}
 
-	var results []*command
+	var results []*Command
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(directoryBucket))
 		pathBucket := b.Bucket([]byte(path))
 		return pathBucket.ForEach(func(k, v []byte) error {
-			cmd := new(command)
-			ci := new(commandInfo)
-			cmd.name = string(k)
-			cmd.info = ci.NewFromString(string(v))
+			cmd := new(Command)
+			ci := new(CommandInfo)
+			cmd.Name = string(k)
+			cmd.Info = ci.NewFromString(string(v))
 
-			if cmd.name == `[ "$LAST_CMD" = "r" ]` {
+			if cmd.Name == `[ "$LAST_CMD" = "r" ]` {
 				return nil
 			}
 
@@ -403,7 +227,7 @@ func resultsDirectory(boltPath string, path string) ([]*command, error) {
 	}
 
 	// Sort commands
-	sortCommands(results)
+	s.sortCommands(results)
 
 	// Print results (Used for testing)
 	// for _, cmd := range results {
@@ -413,22 +237,23 @@ func resultsDirectory(boltPath string, path string) ([]*command, error) {
 	return results, nil
 }
 
-func resultsGlobal(boltPath string) ([]*command, error) {
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+// ResultsGlobal returns all the results for the global commands bucket
+func (s *Session) ResultsGlobal() ([]*Command, error) {
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error globalResults")
 		return nil, err
 	}
 
 	// Now get all the commands stored
-	var results []*command
+	var results []*Command
 	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(globalCommandBucket))
 		err := b.ForEach(func(k, v []byte) error {
-			command := new(command)
-			ci := new(commandInfo)
-			command.name = string(k)
-			command.info = ci.NewFromString(string(v))
+			command := new(Command)
+			ci := new(CommandInfo)
+			command.Name = string(k)
+			command.Info = ci.NewFromString(string(v))
 			results = append(results, command)
 
 			return nil
@@ -447,7 +272,7 @@ func resultsGlobal(boltPath string) ([]*command, error) {
 	}
 
 	// Sort commands
-	sortCommands(results)
+	s.sortCommands(results)
 
 	// Print results (Used for testing)
 	// for _, cmd := range results {
@@ -457,9 +282,9 @@ func resultsGlobal(boltPath string) ([]*command, error) {
 	return results, nil
 }
 
-// add checks if command being passed is in the listCommands
+// Add checks if command being passed is in the listCommands
 // then stores the command and workding directory
-func add(path string, promptCmd string) error {
+func (s *Session) Add(path string, promptCmd string) error {
 	// get the first command in the promptCmd string
 	cmd := strings.Split(promptCmd, " ")[0]
 
@@ -478,7 +303,7 @@ func add(path string, promptCmd string) error {
 		return nil
 	}
 
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error add")
 		return err
@@ -503,9 +328,9 @@ func add(path string, promptCmd string) error {
 		}
 
 		// Create commandInfo struct
-		ci := new(commandInfo)
-		ci.time = time.Now()
-		ci.count = 1
+		ci := new(CommandInfo)
+		ci.Time = time.Now()
+		ci.Count = 1
 
 		// Check if there is a command info value already
 		v := cmdBucket.Get([]byte(promptCmd))
@@ -543,7 +368,7 @@ func add(path string, promptCmd string) error {
 	}
 
 	// now prune the older commands
-	err = prune(path)
+	err = s.Prune(path)
 	if err != nil {
 		return err
 	}
@@ -551,8 +376,8 @@ func add(path string, promptCmd string) error {
 	return nil
 }
 
-// prune deletes commands from a directory bucket and overall bucket
-func prune(path string) error {
+// Prune deletes commands from a directory bucket and overall bucket
+func (s *Session) Prune(path string) error {
 	// Set number to prune from envar
 	numberToPruneDir, err := strconv.Atoi(os.Getenv("R_DIRHISTORY"))
 	if err != nil {
@@ -567,7 +392,7 @@ func prune(path string) error {
 	pruneGlobal := true
 	prunePath := true
 
-	results, err := resultsDirectory(boltPath, path)
+	results, err := s.ResultsDirectory(path)
 	if err != nil {
 		return err
 	}
@@ -577,7 +402,7 @@ func prune(path string) error {
 	}
 
 	// List the global commands
-	globalResults, err := resultsGlobal(boltPath)
+	globalResults, err := s.ResultsGlobal()
 	if err != nil {
 		return err
 	}
@@ -587,7 +412,7 @@ func prune(path string) error {
 		pruneGlobal = false
 	}
 
-	db, err := bolt.Open(boltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(s.BoltPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		fmt.Println("error prune")
 		return err
@@ -607,7 +432,7 @@ func prune(path string) error {
 
 			pruneDirResults := results[numberToPruneDir:]
 			for _, cmd := range pruneDirResults {
-				pathBucket.Delete([]byte(cmd.name))
+				pathBucket.Delete([]byte(cmd.Name))
 			}
 		}
 		// Prune stored global commands
@@ -620,7 +445,7 @@ func prune(path string) error {
 
 			pruneGlobalResults := globalResults[numberToPruneGlobal:]
 			for _, cmd := range pruneGlobalResults {
-				cmdBucket.Delete([]byte(cmd.name))
+				cmdBucket.Delete([]byte(cmd.Name))
 			}
 		}
 
@@ -638,10 +463,10 @@ func prune(path string) error {
 
 // namesOfCmds takes a slice of command structs and return
 // a slice with just their names
-func namesOfCmds(cmds []*command) []string {
+func namesOfCmds(cmds []*Command) []string {
 	var names []string
 	for _, cmd := range cmds {
-		names = append(names, cmd.name)
+		names = append(names, cmd.Name)
 	}
 
 	return names
