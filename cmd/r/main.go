@@ -23,6 +23,10 @@ func main() {
 	globalPtr := flag.Bool("global", false, globalUsage)
 	flag.BoolVar(globalPtr, "g", false, globalUsage+" (shorthand)")
 
+	starUsage := "Star current directory"
+	starPtr := flag.Bool("star", false, starUsage)
+	flag.BoolVar(starPtr, "s", false, starUsage+" (shorthand)")
+
 	versionUsage := "Semantic Version of r"
 	versionPtr := flag.Bool("version", false, versionUsage)
 	flag.BoolVar(versionPtr, "v", false, versionUsage+" (shorthand)")
@@ -90,6 +94,12 @@ func main() {
 	err = s.ResetLastCommand()
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// TODO: Set current directory has starred
+	if *starPtr {
+		fmt.Println("Star current directory")
+		os.Exit(0)
 	}
 
 	// if the version flag is passed print the r package version and exit
