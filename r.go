@@ -461,6 +461,12 @@ func (s *Session) Prune(path string) error {
 	return nil
 }
 
+// Star bookmarks or "stars" the current directory as important
+// Starred directories will have shortcuts and show command information
+func (s *Session) Star() {
+
+}
+
 // namesOfCmds takes a slice of command structs and return
 // a slice with just their names
 func namesOfCmds(cmds []*Command) []string {
