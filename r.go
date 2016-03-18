@@ -20,7 +20,7 @@ const (
 	lastCommandBucket   = "lastCommandBucket"   // BoltDB bucket storing the last command r selected
 
 	// Version is semantic version for package r and cmd/r
-	Version = "0.4.1"
+	Version = "0.4.2"
 )
 
 // Session is created every time r cmd is ran
