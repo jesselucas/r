@@ -1,19 +1,11 @@
 package readline
 
-import (
-	"io"
-	"os"
-)
+import "io"
 
 type Instance struct {
 	Config    *Config
 	Terminal  *Terminal
 	Operation *Operation
-}
-
-type FdReader interface {
-	io.Reader
-	Fd() uintptr
 }
 
 type Config struct {
@@ -23,7 +15,8 @@ type Config struct {
 	// readline will persist historys to file where HistoryFile specified
 	HistoryFile string
 	// specify the max length of historys, it's 500 by default, set it to -1 to disable history
-	HistoryLimit int
+	HistoryLimit           int
+	DisableAutoSaveHistory bool
 
 	// AutoCompleter will called once user press TAB
 	AutoComplete AutoCompleter
@@ -38,16 +31,37 @@ type Config struct {
 	InterruptPrompt string
 	EOFPrompt       string
 
-	Stdin  FdReader
+	FuncGetWidth func() int
+
+	Stdin  io.Reader
 	Stdout io.Writer
 	Stderr io.Writer
 
-	MaskRune rune
+	EnableMask bool
+	MaskRune   rune
+
+	// erase the editing line after user submited it
+	// it use in IM usually.
+	UniqueEditLine bool
+
+	// force use interactive even stdout is not a tty
+	FuncIsTerminal      func() bool
+	FuncMakeRaw         func() error
+	FuncExitRaw         func() error
+	FuncOnWidthChanged  func(func())
+	ForceUseInteractive bool
 
 	// private fields
 	inited    bool
 	opHistory *opHistory
 	opSearch  *opSearch
+}
+
+func (c *Config) useInteractive() bool {
+	if c.ForceUseInteractive {
+		return true
+	}
+	return c.FuncIsTerminal()
 }
 
 func (c *Config) Init() error {
@@ -56,7 +70,7 @@ func (c *Config) Init() error {
 	}
 	c.inited = true
 	if c.Stdin == nil {
-		c.Stdin = os.Stdin
+		c.Stdin = Stdin
 	}
 	if c.Stdout == nil {
 		c.Stdout = Stdout
@@ -79,7 +93,30 @@ func (c *Config) Init() error {
 		c.EOFPrompt = ""
 	}
 
+	if c.FuncGetWidth == nil {
+		c.FuncGetWidth = GetScreenWidth
+	}
+	if c.FuncIsTerminal == nil {
+		c.FuncIsTerminal = DefaultIsTerminal
+	}
+	rm := new(RawMode)
+	if c.FuncMakeRaw == nil {
+		c.FuncMakeRaw = rm.Enter
+	}
+	if c.FuncExitRaw == nil {
+		c.FuncExitRaw = rm.Exit
+	}
+	if c.FuncOnWidthChanged == nil {
+		c.FuncOnWidthChanged = DefaultOnWidthChanged
+	}
+
 	return nil
+}
+
+func (c Config) Clone() *Config {
+	c.opHistory = nil
+	c.opSearch = nil
+	return &c
 }
 
 func (c *Config) SetListener(f func(line []rune, pos int, key rune) (newLine []rune, newPos int, ok bool)) {
@@ -152,8 +189,13 @@ func (i *Instance) ReadPassword(prompt string) ([]byte, error) {
 	return i.Operation.Password(prompt)
 }
 
+// err is one of (nil, io.EOF, readline.ErrInterrupt)
 func (i *Instance) Readline() (string, error) {
 	return i.Operation.String()
+}
+
+func (i *Instance) SaveHistory(content string) error {
+	return i.Operation.SaveHistory(content)
 }
 
 // same as readline

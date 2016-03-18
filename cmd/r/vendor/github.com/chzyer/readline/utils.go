@@ -2,14 +2,15 @@ package readline
 
 import (
 	"bufio"
+	"bytes"
 	"strconv"
-	"syscall"
+
+	"github.com/chzyer/readline/runes"
 
 	"golang.org/x/crypto/ssh/terminal"
 )
 
 var (
-	StdinFd   = int(uintptr(syscall.Stdin))
 	isWindows = false
 )
 
@@ -85,9 +86,49 @@ func escapeKey(r rune) rune {
 	return r
 }
 
+func SplitByMultiLine(start, oldWidth, newWidth int, rs []rune) []string {
+	var ret []string
+	buf := bytes.NewBuffer(nil)
+	currentWidth := start
+	for _, r := range rs {
+		w := runes.Width(r)
+		currentWidth += w
+		buf.WriteRune(r)
+		if currentWidth == newWidth {
+			ret = append(ret, buf.String())
+			buf.Reset()
+			continue
+		}
+		if currentWidth >= oldWidth {
+			ret = append(ret, buf.String())
+			buf.Reset()
+			currentWidth = 0
+		}
+	}
+	ret = append(ret, buf.String())
+	return ret
+}
+
+func SplitByLine(start, screenWidth int, rs []rune) []string {
+	var ret []string
+	buf := bytes.NewBuffer(nil)
+	currentWidth := start
+	for _, r := range rs {
+		w := runes.Width(r)
+		currentWidth += w
+		buf.WriteRune(r)
+		if currentWidth >= screenWidth {
+			ret = append(ret, buf.String())
+			buf.Reset()
+			currentWidth = 0
+		}
+	}
+	ret = append(ret, buf.String())
+	return ret
+}
+
 // calculate how many lines for N character
-func LineCount(w int) int {
-	screenWidth := getWidth()
+func LineCount(screenWidth, w int) int {
 	r := w / screenWidth
 	if w%screenWidth != 0 {
 		r++
@@ -114,4 +155,20 @@ func GetInt(s []string, def int) int {
 		return def
 	}
 	return c
+}
+
+type RawMode struct {
+	state *terminal.State
+}
+
+func (r *RawMode) Enter() (err error) {
+	r.state, err = MakeRaw(GetStdin())
+	return err
+}
+
+func (r *RawMode) Exit() error {
+	if r.state == nil {
+		return nil
+	}
+	return Restore(GetStdin(), r.state)
 }

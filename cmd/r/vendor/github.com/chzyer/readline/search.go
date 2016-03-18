@@ -26,16 +26,24 @@ type opSearch struct {
 	buf       *RuneBuffer
 	data      []rune
 	history   *opHistory
+	cfg       *Config
 	markStart int
 	markEnd   int
+	width     int
 }
 
-func newOpSearch(w io.Writer, buf *RuneBuffer, history *opHistory) *opSearch {
+func newOpSearch(w io.Writer, buf *RuneBuffer, history *opHistory, cfg *Config, width int) *opSearch {
 	return &opSearch{
 		w:       w,
 		buf:     buf,
+		cfg:     cfg,
 		history: history,
+		width:   width,
 	}
+}
+
+func (o *opSearch) OnWidthChange(newWidth int) {
+	o.width = newWidth
 }
 
 func (o *opSearch) IsSearchMode() bool {
@@ -51,9 +59,9 @@ func (o *opSearch) SearchBackspace() {
 
 func (o *opSearch) findHistoryBy(isNewSearch bool) (int, *list.Element) {
 	if o.dir == S_DIR_BCK {
-		return o.history.FindHistoryBck(isNewSearch, o.data, o.buf.idx)
+		return o.history.FindBck(isNewSearch, o.data, o.buf.idx)
 	}
-	return o.history.FindHistoryFwd(isNewSearch, o.data, o.buf.idx)
+	return o.history.FindFwd(isNewSearch, o.data, o.buf.idx)
 }
 
 func (o *opSearch) search(isChange bool) bool {
@@ -123,7 +131,7 @@ func (o *opSearch) SearchRefresh(x int) {
 	}
 	x = o.buf.CurrentWidth(x)
 	x += o.buf.PromptLen()
-	x = x % getWidth()
+	x = x % o.width
 
 	if o.markStart > 0 {
 		o.buf.SetStyle(o.markStart, o.markEnd, "4")
