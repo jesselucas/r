@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -45,7 +44,7 @@ type meta struct {
 	_        uint32
 	_        [16]byte
 	_        uint64
-	_        uint64
+	pgid     uint64
 	_        uint64
 	checksum uint64
 }
@@ -85,32 +84,6 @@ func TestOpen_ErrNotExists(t *testing.T) {
 	}
 }
 
-// Ensure that opening a file with wrong checksum returns ErrChecksum.
-func TestOpen_ErrChecksum(t *testing.T) {
-	buf := make([]byte, pageSize)
-	meta := (*meta)(unsafe.Pointer(&buf[0]))
-	meta.magic = magic
-	meta.version = version
-	meta.checksum = 123
-
-	path := tempfile()
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := f.WriteAt(buf, pageHeaderSize); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(path)
-
-	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrChecksum {
-		t.Fatalf("unexpected error: %s", err)
-	}
-}
-
 // Ensure that opening a file that is not a Bolt database returns ErrInvalid.
 func TestOpen_ErrInvalid(t *testing.T) {
 	path := tempfile()
@@ -132,92 +105,77 @@ func TestOpen_ErrInvalid(t *testing.T) {
 	}
 }
 
-// Ensure that opening a file created with a different version of Bolt returns
-// ErrVersionMismatch.
+// Ensure that opening a file with two invalid versions returns ErrVersionMismatch.
 func TestOpen_ErrVersionMismatch(t *testing.T) {
-	buf := make([]byte, pageSize)
-	meta := (*meta)(unsafe.Pointer(&buf[0]))
-	meta.magic = magic
-	meta.version = version + 100
+	if pageSize != os.Getpagesize() {
+		t.Skip("page size mismatch")
+	}
 
-	path := tempfile()
-	f, err := os.Create(path)
+	// Create empty database.
+	db := MustOpenDB()
+	path := db.Path()
+	defer db.MustClose()
+
+	// Close database.
+	if err := db.DB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read data file.
+	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.WriteAt(buf, pageHeaderSize); err != nil {
-		t.Fatal(err)
-	}
-	if err := f.Close(); err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(path)
 
+	// Rewrite meta pages.
+	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
+	meta0.version++
+	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
+	meta1.version++
+	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
+		t.Fatal(err)
+	}
+
+	// Reopen data file.
 	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrVersionMismatch {
 		t.Fatalf("unexpected error: %s", err)
 	}
 }
 
-// Ensure that opening an already open database file will timeout.
-func TestOpen_Timeout(t *testing.T) {
-	if runtime.GOOS == "solaris" {
-		t.Skip("solaris fcntl locks don't support intra-process locking")
+// Ensure that opening a file with two invalid checksums returns ErrChecksum.
+func TestOpen_ErrChecksum(t *testing.T) {
+	if pageSize != os.Getpagesize() {
+		t.Skip("page size mismatch")
 	}
 
-	path := tempfile()
+	// Create empty database.
+	db := MustOpenDB()
+	path := db.Path()
+	defer db.MustClose()
 
-	// Open a data file.
-	db0, err := bolt.Open(path, 0666, nil)
-	if err != nil {
-		t.Fatal(err)
-	} else if db0 == nil {
-		t.Fatal("expected database")
-	}
-
-	// Attempt to open the database again.
-	start := time.Now()
-	db1, err := bolt.Open(path, 0666, &bolt.Options{Timeout: 100 * time.Millisecond})
-	if err != bolt.ErrTimeout {
-		t.Fatalf("unexpected timeout: %s", err)
-	} else if db1 != nil {
-		t.Fatal("unexpected database")
-	} else if time.Since(start) <= 100*time.Millisecond {
-		t.Fatal("expected to wait at least timeout duration")
-	}
-
-	if err := db0.Close(); err != nil {
+	// Close database.
+	if err := db.DB.Close(); err != nil {
 		t.Fatal(err)
 	}
-}
 
-// Ensure that opening an already open database file will wait until its closed.
-func TestOpen_Wait(t *testing.T) {
-	if runtime.GOOS == "solaris" {
-		t.Skip("solaris fcntl locks don't support intra-process locking")
-	}
-
-	path := tempfile()
-
-	// Open a data file.
-	db0, err := bolt.Open(path, 0666, nil)
+	// Read data file.
+	buf, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Close it in just a bit.
-	time.AfterFunc(100*time.Millisecond, func() { _ = db0.Close() })
-
-	// Attempt to open the database again.
-	start := time.Now()
-	db1, err := bolt.Open(path, 0666, &bolt.Options{Timeout: 200 * time.Millisecond})
-	if err != nil {
+	// Rewrite meta pages.
+	meta0 := (*meta)(unsafe.Pointer(&buf[pageHeaderSize]))
+	meta0.pgid++
+	meta1 := (*meta)(unsafe.Pointer(&buf[pageSize+pageHeaderSize]))
+	meta1.pgid++
+	if err := ioutil.WriteFile(path, buf, 0666); err != nil {
 		t.Fatal(err)
-	} else if time.Since(start) <= 100*time.Millisecond {
-		t.Fatal("expected to wait at least timeout duration")
 	}
 
-	if err := db1.Close(); err != nil {
-		t.Fatal(err)
+	// Reopen data file.
+	if _, err := bolt.Open(path, 0666, nil); err != bolt.ErrChecksum {
+		t.Fatalf("unexpected error: %s", err)
 	}
 }
 
@@ -228,6 +186,8 @@ func TestOpen_Size(t *testing.T) {
 	db := MustOpenDB()
 	path := db.Path()
 	defer db.MustClose()
+
+	pagesize := db.Info().PageSize
 
 	// Insert until we get above the minimum 4MB size.
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -273,7 +233,8 @@ func TestOpen_Size(t *testing.T) {
 	}
 
 	// Compare the original size with the new size.
-	if sz != newSz {
+	// db size might increase by a few page sizes due to the new small update.
+	if sz < newSz-5*int64(pagesize) {
 		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
 	}
 }
@@ -289,6 +250,8 @@ func TestOpen_Size_Large(t *testing.T) {
 	db := MustOpenDB()
 	path := db.Path()
 	defer db.MustClose()
+
+	pagesize := db.Info().PageSize
 
 	// Insert until we get above the minimum 4MB size.
 	var index uint64
@@ -338,7 +301,8 @@ func TestOpen_Size_Large(t *testing.T) {
 	}
 
 	// Compare the original size with the new size.
-	if sz != newSz {
+	// db size might increase by a few page sizes due to the new small update.
+	if sz < newSz-5*int64(pagesize) {
 		t.Fatalf("unexpected file growth: %d => %d", sz, newSz)
 	}
 }
@@ -395,103 +359,6 @@ func TestOpen_FileTooSmall(t *testing.T) {
 	db, err = bolt.Open(path, 0666, nil)
 	if err == nil || err.Error() != "file size too small" {
 		t.Fatalf("unexpected error: %s", err)
-	}
-}
-
-// Ensure that a database can be opened in read-only mode by multiple processes
-// and that a database can not be opened in read-write mode and in read-only
-// mode at the same time.
-func TestOpen_ReadOnly(t *testing.T) {
-	if runtime.GOOS == "solaris" {
-		t.Skip("solaris fcntl locks don't support intra-process locking")
-	}
-
-	bucket, key, value := []byte(`bucket`), []byte(`key`), []byte(`value`)
-
-	path := tempfile()
-
-	// Open in read-write mode.
-	db, err := bolt.Open(path, 0666, nil)
-	if err != nil {
-		t.Fatal(err)
-	} else if db.IsReadOnly() {
-		t.Fatal("db should not be in read only mode")
-	}
-	if err := db.Update(func(tx *bolt.Tx) error {
-		b, err := tx.CreateBucket(bucket)
-		if err != nil {
-			return err
-		}
-		if err := b.Put(key, value); err != nil {
-			t.Fatal(err)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	// Open in read-only mode.
-	db0, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Opening in read-write mode should return an error.
-	if _, err = bolt.Open(path, 0666, &bolt.Options{Timeout: time.Millisecond * 100}); err == nil {
-		t.Fatal("expected error")
-	}
-
-	// And again (in read-only mode).
-	db1, err := bolt.Open(path, 0666, &bolt.Options{ReadOnly: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Verify both read-only databases are accessible.
-	for _, db := range []*bolt.DB{db0, db1} {
-		// Verify is is in read only mode indeed.
-		if !db.IsReadOnly() {
-			t.Fatal("expected read only mode")
-		}
-
-		// Read-only databases should not allow updates.
-		if err := db.Update(func(*bolt.Tx) error {
-			panic(`should never get here`)
-		}); err != bolt.ErrDatabaseReadOnly {
-			t.Fatalf("unexpected error: %s", err)
-		}
-
-		// Read-only databases should not allow beginning writable txns.
-		if _, err := db.Begin(true); err != bolt.ErrDatabaseReadOnly {
-			t.Fatalf("unexpected error: %s", err)
-		}
-
-		// Verify the data.
-		if err := db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket(bucket)
-			if b == nil {
-				return fmt.Errorf("expected bucket `%s`", string(bucket))
-			}
-
-			got := string(b.Get(key))
-			expected := string(value)
-			if got != expected {
-				return fmt.Errorf("expected `%s`, got `%s`", expected, got)
-			}
-			return nil
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if err := db0.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := db1.Close(); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -904,11 +771,11 @@ func TestDB_Stats(t *testing.T) {
 
 	stats := db.Stats()
 	if stats.TxStats.PageCount != 2 {
-		t.Fatalf("unexpected TxStats.PageCount", stats.TxStats.PageCount)
+		t.Fatalf("unexpected TxStats.PageCount: %d", stats.TxStats.PageCount)
 	} else if stats.FreePageN != 0 {
-		t.Fatalf("unexpected FreePageN != 0", stats.FreePageN)
+		t.Fatalf("unexpected FreePageN != 0: %d", stats.FreePageN)
 	} else if stats.PendingPageN != 2 {
-		t.Fatalf("unexpected PendingPageN != 2", stats.PendingPageN)
+		t.Fatalf("unexpected PendingPageN != 2: %d", stats.PendingPageN)
 	}
 }
 

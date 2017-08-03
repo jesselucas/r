@@ -80,6 +80,46 @@ func TestBucket_Get_IncompatibleValue(t *testing.T) {
 	}
 }
 
+// Ensure that a slice returned from a bucket has a capacity equal to its length.
+// This also allows slices to be appended to since it will require a realloc by Go.
+//
+// https://github.com/boltdb/bolt/issues/544
+func TestBucket_Get_Capacity(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+
+	// Write key to a bucket.
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b, err := tx.CreateBucket([]byte("bucket"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("key"), []byte("val"))
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Retrieve value and attempt to append to it.
+	if err := db.Update(func(tx *bolt.Tx) error {
+		k, v := tx.Bucket([]byte("bucket")).Cursor().First()
+
+		// Verify capacity.
+		if len(k) != cap(k) {
+			t.Fatalf("unexpected key slice capacity: %d", cap(k))
+		} else if len(v) != cap(v) {
+			t.Fatalf("unexpected value slice capacity: %d", cap(v))
+		}
+
+		// Ensure slice can be appended to without a segfault.
+		k = append(k, []byte("123")...)
+		v = append(v, []byte("123")...)
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Ensure that a bucket can write a key/value.
 func TestBucket_Put(t *testing.T) {
 	db := MustOpenDB()
@@ -456,10 +496,10 @@ func TestBucket_Nested(t *testing.T) {
 	if err := db.View(func(tx *bolt.Tx) error {
 		var b = tx.Bucket([]byte("widgets"))
 		if v := b.Bucket([]byte("foo")).Get([]byte("baz")); !bytes.Equal(v, []byte("yyyy")) {
-			t.Fatalf("unexpected value: %v")
+			t.Fatalf("unexpected value: %v", v)
 		}
-		if !bytes.Equal(b.Get([]byte("bar")), []byte("xxxx")) {
-			t.Fatalf("unexpected value: %v")
+		if v := b.Get([]byte("bar")); !bytes.Equal(v, []byte("xxxx")) {
+			t.Fatalf("unexpected value: %v", v)
 		}
 		for i := 0; i < 10000; i++ {
 			if v := b.Get([]byte(strconv.Itoa(i))); !bytes.Equal(v, []byte(strconv.Itoa(i))) {
@@ -735,6 +775,48 @@ func TestBucket_DeleteBucket_IncompatibleValue(t *testing.T) {
 		}
 		if err := tx.Bucket([]byte("widgets")).DeleteBucket([]byte("foo")); err != bolt.ErrIncompatibleValue {
 			t.Fatalf("unexpected error: %s", err)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Ensure bucket can set and update its sequence number.
+func TestBucket_Sequence(t *testing.T) {
+	db := MustOpenDB()
+	defer db.MustClose()
+
+	if err := db.Update(func(tx *bolt.Tx) error {
+		bkt, err := tx.CreateBucket([]byte("0"))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Retrieve sequence.
+		if v := bkt.Sequence(); v != 0 {
+			t.Fatalf("unexpected sequence: %d", v)
+		}
+
+		// Update sequence.
+		if err := bkt.SetSequence(1000); err != nil {
+			t.Fatal(err)
+		}
+
+		// Read sequence again.
+		if v := bkt.Sequence(); v != 1000 {
+			t.Fatalf("unexpected sequence: %d", v)
+		}
+
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify sequence in separate transaction.
+	if err := db.View(func(tx *bolt.Tx) error {
+		if v := tx.Bucket([]byte("0")).Sequence(); v != 1000 {
+			t.Fatalf("unexpected sequence: %d", v)
 		}
 		return nil
 	}); err != nil {
@@ -1118,18 +1200,18 @@ func TestBucket_Stats(t *testing.T) {
 		// Only check allocations for 4KB pages.
 		if os.Getpagesize() == 4096 {
 			if stats.BranchAlloc != 4096 {
-				t.Fatalf("unexpected BranchAlloc:", stats.BranchAlloc)
+				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 36864 {
-				t.Fatalf("unexpected LeafAlloc:", stats.LeafAlloc)
+				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
 			}
 		}
 
 		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN:", stats.BucketN)
+			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
 		} else if stats.InlineBucketN != 0 {
-			t.Fatalf("unexpected InlineBucketN:", stats.InlineBucketN)
+			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
 		} else if stats.InlineBucketInuse != 0 {
-			t.Fatalf("unexpected InlineBucketInuse:", stats.InlineBucketInuse)
+			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 		}
 
 		return nil
@@ -1178,27 +1260,27 @@ func TestBucket_Stats_RandomFill(t *testing.T) {
 	if err := db.View(func(tx *bolt.Tx) error {
 		stats := tx.Bucket([]byte("woojits")).Stats()
 		if stats.KeyN != 100000 {
-			t.Fatalf("unexpected KeyN", stats.KeyN)
+			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
 		}
 
 		if stats.BranchPageN != 98 {
-			t.Fatalf("unexpected BranchPageN", stats.BranchPageN)
+			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
 		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN", stats.BranchOverflowN)
+			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
 		} else if stats.BranchInuse != 130984 {
-			t.Fatalf("unexpected BranchInuse", stats.BranchInuse)
+			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
 		} else if stats.BranchAlloc != 401408 {
-			t.Fatalf("unexpected BranchAlloc", stats.BranchAlloc)
+			t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 		}
 
 		if stats.LeafPageN != 3412 {
-			t.Fatalf("unexpected LeafPageN", stats.LeafPageN)
+			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
 		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN", stats.LeafOverflowN)
+			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
 		} else if stats.LeafInuse != 4742482 {
-			t.Fatalf("unexpected LeafInuse", stats.LeafInuse)
+			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		} else if stats.LeafAlloc != 13975552 {
-			t.Fatalf("unexpected LeafAlloc", stats.LeafAlloc)
+			t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
 		}
 		return nil
 	}); err != nil {
@@ -1232,37 +1314,37 @@ func TestBucket_Stats_Small(t *testing.T) {
 		b := tx.Bucket([]byte("whozawhats"))
 		stats := b.Stats()
 		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: ", stats.BranchPageN)
+			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
 		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: ", stats.BranchOverflowN)
+			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
 		} else if stats.LeafPageN != 0 {
-			t.Fatalf("unexpected LeafPageN: ", stats.LeafPageN)
+			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
 		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: ", stats.LeafOverflowN)
+			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
 		} else if stats.KeyN != 1 {
-			t.Fatalf("unexpected KeyN: ", stats.KeyN)
+			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
 		} else if stats.Depth != 1 {
-			t.Fatalf("unexpected Depth: ", stats.Depth)
+			t.Fatalf("unexpected Depth: %d", stats.Depth)
 		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: ", stats.BranchInuse)
+			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
 		} else if stats.LeafInuse != 0 {
-			t.Fatalf("unexpected LeafInuse: ", stats.LeafInuse)
+			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
 		if os.Getpagesize() == 4096 {
 			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: ", stats.BranchAlloc)
+				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 0 {
-				t.Fatalf("unexpected LeafAlloc: ", stats.LeafAlloc)
+				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
 			}
 		}
 
 		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: ", stats.BucketN)
+			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
 		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: ", stats.InlineBucketN)
+			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
 		} else if stats.InlineBucketInuse != 16+16+6 {
-			t.Fatalf("unexpected InlineBucketInuse: ", stats.InlineBucketInuse)
+			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 		}
 
 		return nil
@@ -1291,37 +1373,37 @@ func TestBucket_Stats_EmptyBucket(t *testing.T) {
 		b := tx.Bucket([]byte("whozawhats"))
 		stats := b.Stats()
 		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: ", stats.BranchPageN)
+			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
 		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: ", stats.BranchOverflowN)
+			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
 		} else if stats.LeafPageN != 0 {
-			t.Fatalf("unexpected LeafPageN: ", stats.LeafPageN)
+			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
 		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: ", stats.LeafOverflowN)
+			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
 		} else if stats.KeyN != 0 {
-			t.Fatalf("unexpected KeyN: ", stats.KeyN)
+			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
 		} else if stats.Depth != 1 {
-			t.Fatalf("unexpected Depth: ", stats.Depth)
+			t.Fatalf("unexpected Depth: %d", stats.Depth)
 		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: ", stats.BranchInuse)
+			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
 		} else if stats.LeafInuse != 0 {
-			t.Fatalf("unexpected LeafInuse: ", stats.LeafInuse)
+			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
 		if os.Getpagesize() == 4096 {
 			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: ", stats.BranchAlloc)
+				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 0 {
-				t.Fatalf("unexpected LeafAlloc: ", stats.LeafAlloc)
+				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
 			}
 		}
 
 		if stats.BucketN != 1 {
-			t.Fatalf("unexpected BucketN: ", stats.BucketN)
+			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
 		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: ", stats.InlineBucketN)
+			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
 		} else if stats.InlineBucketInuse != 16 {
-			t.Fatalf("unexpected InlineBucketInuse: ", stats.InlineBucketInuse)
+			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 		}
 
 		return nil
@@ -1377,19 +1459,19 @@ func TestBucket_Stats_Nested(t *testing.T) {
 		b := tx.Bucket([]byte("foo"))
 		stats := b.Stats()
 		if stats.BranchPageN != 0 {
-			t.Fatalf("unexpected BranchPageN: ", stats.BranchPageN)
+			t.Fatalf("unexpected BranchPageN: %d", stats.BranchPageN)
 		} else if stats.BranchOverflowN != 0 {
-			t.Fatalf("unexpected BranchOverflowN: ", stats.BranchOverflowN)
+			t.Fatalf("unexpected BranchOverflowN: %d", stats.BranchOverflowN)
 		} else if stats.LeafPageN != 2 {
-			t.Fatalf("unexpected LeafPageN: ", stats.LeafPageN)
+			t.Fatalf("unexpected LeafPageN: %d", stats.LeafPageN)
 		} else if stats.LeafOverflowN != 0 {
-			t.Fatalf("unexpected LeafOverflowN: ", stats.LeafOverflowN)
+			t.Fatalf("unexpected LeafOverflowN: %d", stats.LeafOverflowN)
 		} else if stats.KeyN != 122 {
-			t.Fatalf("unexpected KeyN: ", stats.KeyN)
+			t.Fatalf("unexpected KeyN: %d", stats.KeyN)
 		} else if stats.Depth != 3 {
-			t.Fatalf("unexpected Depth: ", stats.Depth)
+			t.Fatalf("unexpected Depth: %d", stats.Depth)
 		} else if stats.BranchInuse != 0 {
-			t.Fatalf("unexpected BranchInuse: ", stats.BranchInuse)
+			t.Fatalf("unexpected BranchInuse: %d", stats.BranchInuse)
 		}
 
 		foo := 16            // foo (pghdr)
@@ -1407,23 +1489,23 @@ func TestBucket_Stats_Nested(t *testing.T) {
 		baz += 10 + 10 // baz leaf key/values
 
 		if stats.LeafInuse != foo+bar+baz {
-			t.Fatalf("unexpected LeafInuse: ", stats.LeafInuse)
+			t.Fatalf("unexpected LeafInuse: %d", stats.LeafInuse)
 		}
 
 		if os.Getpagesize() == 4096 {
 			if stats.BranchAlloc != 0 {
-				t.Fatalf("unexpected BranchAlloc: ", stats.BranchAlloc)
+				t.Fatalf("unexpected BranchAlloc: %d", stats.BranchAlloc)
 			} else if stats.LeafAlloc != 8192 {
-				t.Fatalf("unexpected LeafAlloc: ", stats.LeafAlloc)
+				t.Fatalf("unexpected LeafAlloc: %d", stats.LeafAlloc)
 			}
 		}
 
 		if stats.BucketN != 3 {
-			t.Fatalf("unexpected BucketN: ", stats.BucketN)
+			t.Fatalf("unexpected BucketN: %d", stats.BucketN)
 		} else if stats.InlineBucketN != 1 {
-			t.Fatalf("unexpected InlineBucketN: ", stats.InlineBucketN)
+			t.Fatalf("unexpected InlineBucketN: %d", stats.InlineBucketN)
 		} else if stats.InlineBucketInuse != baz {
-			t.Fatalf("unexpected InlineBucketInuse: ", stats.InlineBucketInuse)
+			t.Fatalf("unexpected InlineBucketInuse: %d", stats.InlineBucketInuse)
 		}
 
 		return nil
