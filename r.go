@@ -20,7 +20,7 @@ const (
 	lastCommandBucket   = "lastCommandBucket"   // BoltDB bucket storing the last command r selected
 
 	// Version is semantic version for package r and cmd/r
-	Version = "0.4.3"
+	Version = "0.4.4"
 )
 
 // Session is created every time r cmd is ran
@@ -295,6 +295,7 @@ func (s *Session) Add(path string, promptCmd string) error {
 
 	commands, err := listCommands()
 	if err != nil {
+		fmt.Println("list commands?")
 		return err
 	}
 
@@ -501,6 +502,12 @@ func listCommands() ([]string, error) {
 	findCommands := func(p string) {
 		defer wg.Done()
 
+		// First check to see if directory exist
+		if exists(p) == false {
+			errc <- nil
+			return
+		}
+
 		files, err := ioutil.ReadDir(p)
 		if err != nil {
 			errc <- err // write err into error chan
@@ -522,6 +529,7 @@ func listCommands() ([]string, error) {
 	// Check each path for commands
 	for _, p := range paths {
 		wg.Add(1)
+
 		go findCommands(p)
 
 		// read any error that is in error chan
@@ -533,6 +541,14 @@ func listCommands() ([]string, error) {
 	wg.Wait() // Wait for the paths to be checked
 
 	return commands, nil
+}
+
+func exists(path string) bool {
+	_, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // stats TODO print stats and usage of r
